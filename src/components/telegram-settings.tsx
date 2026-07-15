@@ -9,8 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Copy, Send, Sparkles, Trash2, Info, MessageCircle } from "lucide-react";
+import { Copy, Send, Sparkles, Trash2, Info, MessageCircle, Crown, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
 
 const BOT_USERNAME =
   (import.meta as any).env?.VITE_TELEGRAM_BOT_USERNAME || "Yat_Lite_Bot";
