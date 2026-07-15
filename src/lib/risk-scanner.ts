@@ -229,7 +229,7 @@ export async function scanAndCreateAlerts(parentId: string) {
       alert_type: "SUSPICIOUS_APP",
       severity: sev,
       title: `Suspicious app opened: ${displayName}`,
-      description:
+      message:
         `${displayName} (${c.package_name}) — risk ${r.score} / ${r.classification}. ` +
         `Reasons: ${r.reasons.join("; ") || "keyword match"} ${pkgTag(c.package_name, c.device_id)}`,
       is_read: false,
