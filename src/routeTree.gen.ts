@@ -13,9 +13,14 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppUsageRouteImport } from './routes/_app.usage'
+import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppPairRouteImport } from './routes/_app.pair'
 import { Route as AppDevicesRouteImport } from './routes/_app.devices'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppAppsRouteImport } from './routes/_app.apps'
+import { Route as AppAlertsRouteImport } from './routes/_app.alerts'
+import { Route as AppAppsPkgRouteImport } from './routes/_app.apps.$pkg'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -36,6 +41,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppUsageRoute = AppUsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPairRoute = AppPairRouteImport.update({
   id: '/pair',
   path: '/pair',
@@ -51,22 +66,47 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAppsRoute = AppAppsRouteImport.update({
+  id: '/apps',
+  path: '/apps',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAlertsRoute = AppAlertsRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAppsPkgRoute = AppAppsPkgRouteImport.update({
+  id: '/$pkg',
+  path: '/$pkg',
+  getParentRoute: () => AppAppsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/alerts': typeof AppAlertsRoute
+  '/apps': typeof AppAppsRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/devices': typeof AppDevicesRoute
   '/pair': typeof AppPairRoute
+  '/settings': typeof AppSettingsRoute
+  '/usage': typeof AppUsageRoute
+  '/apps/$pkg': typeof AppAppsPkgRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/alerts': typeof AppAlertsRoute
+  '/apps': typeof AppAppsRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/devices': typeof AppDevicesRoute
   '/pair': typeof AppPairRoute
+  '/settings': typeof AppSettingsRoute
+  '/usage': typeof AppUsageRoute
+  '/apps/$pkg': typeof AppAppsPkgRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -74,9 +114,14 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_app/alerts': typeof AppAlertsRoute
+  '/_app/apps': typeof AppAppsRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/devices': typeof AppDevicesRoute
   '/_app/pair': typeof AppPairRoute
+  '/_app/settings': typeof AppSettingsRoute
+  '/_app/usage': typeof AppUsageRoute
+  '/_app/apps/$pkg': typeof AppAppsPkgRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -84,20 +129,41 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/alerts'
+    | '/apps'
     | '/dashboard'
     | '/devices'
     | '/pair'
+    | '/settings'
+    | '/usage'
+    | '/apps/$pkg'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/reset-password' | '/dashboard' | '/devices' | '/pair'
+  to:
+    | '/'
+    | '/auth'
+    | '/reset-password'
+    | '/alerts'
+    | '/apps'
+    | '/dashboard'
+    | '/devices'
+    | '/pair'
+    | '/settings'
+    | '/usage'
+    | '/apps/$pkg'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/auth'
     | '/reset-password'
+    | '/_app/alerts'
+    | '/_app/apps'
     | '/_app/dashboard'
     | '/_app/devices'
     | '/_app/pair'
+    | '/_app/settings'
+    | '/_app/usage'
+    | '/_app/apps/$pkg'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -137,6 +203,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/usage': {
+      id: '/_app/usage'
+      path: '/usage'
+      fullPath: '/usage'
+      preLoaderRoute: typeof AppUsageRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/pair': {
       id: '/_app/pair'
       path: '/pair'
@@ -158,19 +238,59 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/apps': {
+      id: '/_app/apps'
+      path: '/apps'
+      fullPath: '/apps'
+      preLoaderRoute: typeof AppAppsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/alerts': {
+      id: '/_app/alerts'
+      path: '/alerts'
+      fullPath: '/alerts'
+      preLoaderRoute: typeof AppAlertsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/apps/$pkg': {
+      id: '/_app/apps/$pkg'
+      path: '/$pkg'
+      fullPath: '/apps/$pkg'
+      preLoaderRoute: typeof AppAppsPkgRouteImport
+      parentRoute: typeof AppAppsRoute
+    }
   }
 }
 
+interface AppAppsRouteChildren {
+  AppAppsPkgRoute: typeof AppAppsPkgRoute
+}
+
+const AppAppsRouteChildren: AppAppsRouteChildren = {
+  AppAppsPkgRoute: AppAppsPkgRoute,
+}
+
+const AppAppsRouteWithChildren =
+  AppAppsRoute._addFileChildren(AppAppsRouteChildren)
+
 interface AppRouteChildren {
+  AppAlertsRoute: typeof AppAlertsRoute
+  AppAppsRoute: typeof AppAppsRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
   AppDevicesRoute: typeof AppDevicesRoute
   AppPairRoute: typeof AppPairRoute
+  AppSettingsRoute: typeof AppSettingsRoute
+  AppUsageRoute: typeof AppUsageRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAlertsRoute: AppAlertsRoute,
+  AppAppsRoute: AppAppsRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
   AppDevicesRoute: AppDevicesRoute,
   AppPairRoute: AppPairRoute,
+  AppSettingsRoute: AppSettingsRoute,
+  AppUsageRoute: AppUsageRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
