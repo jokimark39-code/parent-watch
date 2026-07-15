@@ -60,6 +60,15 @@ function AlertsPage() {
       return data ?? [];
     },
   });
+  const appsQ = useQuery({
+    queryKey: ["alerts-apps", uid],
+    enabled: !!uid,
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const { data } = await supabase.from("installed_apps").select("*");
+      return data ?? [];
+    },
+  });
   const devicesQ = useQuery({
     queryKey: ["alerts-devices", uid],
     enabled: !!uid,
