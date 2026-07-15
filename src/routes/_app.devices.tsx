@@ -13,7 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Trash2, Eye, Search, AlertTriangle } from "lucide-react";
+import { Trash2, Eye, Search, AlertTriangle, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -35,10 +35,12 @@ function DevicesPage() {
   useRealtimeInvalidate("installed_apps", [["devices"]], uid);
 
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<"last_seen" | "child_name" | "device_name">("last_seen");
+  const [sort, setSort] = useState<"last_seen" | "device_name" | "device_model">("last_seen");
   const [page, setPage] = useState(1);
   const PAGE = 10;
   const [viewing, setViewing] = useState<any | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   const query = useQuery({
     queryKey: ["devices", uid],
@@ -64,12 +66,24 @@ function DevicesPage() {
     onError: (e: any) => toast.error(e.message ?? "Failed to delete"),
   });
 
+  const rename = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("devices").update({ device_name: name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Device renamed");
+      setEditingId(null);
+      qc.invalidateQueries({ queryKey: ["devices"] });
+    },
+    onError: (e: any) => toast.error(e.message ?? "Failed to rename"),
+  });
+
   const rows = useMemo(() => {
     const list = (query.data?.devices ?? []).filter((d: any) => {
       if (!q) return true;
       const s = q.toLowerCase();
       return (
-        (d.child_name || "").toLowerCase().includes(s) ||
         (d.device_name || "").toLowerCase().includes(s) ||
         (d.device_model || "").toLowerCase().includes(s)
       );
@@ -112,8 +126,8 @@ function DevicesPage() {
               value={sort} onChange={(e) => setSort(e.target.value as any)}
             >
               <option value="last_seen">Last seen</option>
-              <option value="child_name">Child name</option>
               <option value="device_name">Device name</option>
+              <option value="device_model">Model</option>
             </select>
           </div>
         </CardHeader>
@@ -127,10 +141,8 @@ function DevicesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Child</TableHead>
                     <TableHead>Device</TableHead>
                     <TableHead>Model</TableHead>
-                    <TableHead>Android</TableHead>
                     <TableHead>Last seen</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Apps</TableHead>
@@ -140,10 +152,38 @@ function DevicesPage() {
                 <TableBody>
                   {paged.map((d: any) => (
                     <TableRow key={d.id}>
-                      <TableCell className="font-medium">{d.child_name || "—"}</TableCell>
-                      <TableCell>{d.device_name || "—"}</TableCell>
-                      <TableCell>{d.device_model || "—"}</TableCell>
-                      <TableCell>{d.android_version || "—"}</TableCell>
+                      <TableCell className="font-medium">
+                        {editingId === d.id ? (
+                          <div className="flex items-center gap-1">
+                            <Input
+                              autoFocus
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && editValue.trim()) rename.mutate({ id: d.id, name: editValue.trim() });
+                                if (e.key === "Escape") setEditingId(null);
+                              }}
+                              className="h-8 w-40"
+                            />
+                            <Button size="icon" variant="ghost" className="h-8 w-8" disabled={!editValue.trim() || rename.isPending}
+                              onClick={() => rename.mutate({ id: d.id, name: editValue.trim() })}>
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingId(null)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 group">
+                            <span>{d.device_name || d.device_model || "Unnamed device"}</span>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                              onClick={() => { setEditingId(d.id); setEditValue(d.device_name || ""); }}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>{d.device_model || d.manufacturer || "—"}</TableCell>
                       <TableCell>{formatRelative(d.last_seen)}</TableCell>
                       <TableCell>
                         <Badge variant={isOnline(d.last_seen) ? "default" : "secondary"}>
@@ -161,7 +201,7 @@ function DevicesPage() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete this device?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This removes {d.device_name || d.child_name || "the device"} from your dashboard.
+                                This removes {d.device_name || d.device_model || "the device"} from your dashboard.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -191,12 +231,11 @@ function DevicesPage() {
 
       <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{viewing?.device_name || viewing?.child_name || "Device"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{viewing?.device_name || viewing?.device_model || "Device"}</DialogTitle></DialogHeader>
           {viewing && (
             <dl className="grid grid-cols-2 gap-2 text-sm">
-              <dt className="text-muted-foreground">Child</dt><dd>{viewing.child_name || "—"}</dd>
+              <dt className="text-muted-foreground">Name</dt><dd>{viewing.device_name || "—"}</dd>
               <dt className="text-muted-foreground">Model</dt><dd>{viewing.device_model || "—"}</dd>
-              <dt className="text-muted-foreground">Android</dt><dd>{viewing.android_version || "—"}</dd>
               <dt className="text-muted-foreground">Manufacturer</dt><dd>{viewing.manufacturer || "—"}</dd>
               <dt className="text-muted-foreground">Last seen</dt><dd>{formatRelative(viewing.last_seen)}</dd>
               <dt className="text-muted-foreground">Installed apps</dt><dd>{appsCount[viewing.id] ?? 0}</dd>
