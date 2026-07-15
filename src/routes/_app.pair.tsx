@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_app/pair")({
 });
 
 const CODE_TTL_SEC = 300; // 5 minutes
-const STATUS_WAITING = "waiting";
+const STATUS_WAITING = "WAITING";
 const STATUS_PAIRED = "paired";
 const STATUS_EXPIRED = "expired";
 const STATUS_CANCELLED = "cancelled";
