@@ -55,14 +55,6 @@ function AlertsPage() {
   const appsQ = useQuery({
     queryKey: ["alerts-apps", uid],
     enabled: !!uid,
-    queryFn: async () => {
-      const { data } = await supabase.from("installed_apps").select("package_name,app_name,icon_path,device_id");
-      return data ?? [];
-    },
-  });
-  const appsQ = useQuery({
-    queryKey: ["alerts-apps", uid],
-    enabled: !!uid,
     refetchInterval: 15_000,
     queryFn: async () => {
       const { data } = await supabase.from("installed_apps").select("*");
