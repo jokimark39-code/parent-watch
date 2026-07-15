@@ -24,6 +24,8 @@ const titles: Record<string, string> = {
 function AppLayout() {
   const { session, loading } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useAlertScanner();
+
 
   if (loading) {
     return (
