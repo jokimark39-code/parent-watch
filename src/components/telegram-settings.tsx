@@ -144,8 +144,12 @@ export function TelegramSettings() {
     setSending(true);
     try {
       if (!session?.access_token) throw new Error("Not signed in");
-      await sendTelegram({ data: { test: true, accessToken: session.access_token } });
-      toast.success("Test alert sent to your Telegram");
+      const res: any = await sendTelegram({ data: { test: true, accessToken: session.access_token } });
+      if (res?.skipped === "not_connected") {
+        toast.error("Telegram is not connected yet. Send /start <code> to the bot first.");
+      } else {
+        toast.success("Test alert sent to your Telegram");
+      }
     } catch (e: any) {
       toast.error(e.message ?? "Failed to send test");
     } finally {

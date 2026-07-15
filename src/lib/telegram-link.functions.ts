@@ -119,7 +119,9 @@ export const sendTelegramAlert = createServerFn({ method: "POST" })
 
     if (connError) throw connError;
     if (!conn?.is_connected || !conn?.telegram_chat_id) {
-      throw new Error("Telegram is not connected");
+      // Not an error: Telegram is optional. Skip silently so background
+      // notifiers don't surface runtime errors when the user hasn't linked yet.
+      return { ok: false, skipped: "not_connected" as const };
     }
 
     let message: string;
