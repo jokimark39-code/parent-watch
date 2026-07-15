@@ -84,7 +84,6 @@ function DevicesPage() {
       if (!q) return true;
       const s = q.toLowerCase();
       return (
-        (d.child_name || "").toLowerCase().includes(s) ||
         (d.device_name || "").toLowerCase().includes(s) ||
         (d.device_model || "").toLowerCase().includes(s)
       );
