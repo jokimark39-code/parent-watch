@@ -1,21 +1,24 @@
 // Supabase Edge Function: send-telegram-alert
 // Deploy: `supabase functions deploy send-telegram-alert`
 //
-// Uses the Lovable connector gateway for Telegram (no bot token needed).
-// Secrets required (Supabase → Edge Functions → Secrets):
+// Uses the APP's external Supabase (iuuvannpblamllbsqtfl) with the caller's
+// JWT so all reads/writes go through RLS as that user. No service role needed.
+//
+// Secrets required:
 //   LOVABLE_API_KEY
 //   TELEGRAM_API_KEY
-//   SUPABASE_URL
-//   SUPABASE_SERVICE_ROLE_KEY
 //   DASHBOARD_URL (optional)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const TELEGRAM_API_KEY = Deno.env.get("TELEGRAM_API_KEY")!;
-const SB_URL = Deno.env.get("SUPABASE_URL")!;
-const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DASHBOARD_URL = Deno.env.get("DASHBOARD_URL") ?? "";
+
+// External app database (same as src/lib/supabase.ts)
+const APP_SUPABASE_URL = "https://iuuvannpblamllbsqtfl.supabase.co";
+const APP_SUPABASE_ANON = "sb_publishable_cXZHltdEI5WB4GKzjcwdQg_u3RJlPZ1";
+
 const GATEWAY = "https://connector-gateway.lovable.dev/telegram";
 
 const cors = {
@@ -24,7 +27,12 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const admin = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
 
 async function sendTg(chatId: string, text: string) {
   const r = await fetch(`${GATEWAY}/sendMessage`, {
@@ -37,8 +45,7 @@ async function sendTg(chatId: string, text: string) {
     body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
   });
   if (!r.ok) {
-    const body = await r.text();
-    console.error(`Telegram gateway failed [${r.status}]: ${body}`);
+    console.error(`Telegram gateway failed [${r.status}]: ${await r.text()}`);
     return false;
   }
   const data = await r.json().catch(() => ({}));
@@ -73,23 +80,29 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization") || "";
     const jwt = authHeader.replace(/^Bearer\s+/i, "");
-    if (!jwt) return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...cors, "Content-Type": "application/json" } });
+    if (!jwt) return json({ error: "unauthorized" }, 401);
 
-    const { data: userRes, error: uErr } = await admin.auth.getUser(jwt);
-    if (uErr || !userRes?.user) return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...cors, "Content-Type": "application/json" } });
+    // Use the caller's JWT so RLS scopes queries to that user.
+    const app = createClient(APP_SUPABASE_URL, APP_SUPABASE_ANON, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+    });
 
+    const { data: userRes, error: uErr } = await app.auth.getUser(jwt);
+    if (uErr || !userRes?.user) return json({ error: "unauthorized" }, 401);
     const user = userRes.user;
+
     const body = await req.json().catch(() => ({}));
     const { alert_id, test } = body as { alert_id?: string; test?: boolean };
 
-    const { data: conn } = await admin
+    const { data: conn } = await app
       .from("telegram_connections")
       .select("telegram_chat_id, is_connected")
       .eq("parent_id", user.id)
       .maybeSingle();
 
     if (!conn?.is_connected || !conn?.telegram_chat_id) {
-      return new Response(JSON.stringify({ error: "telegram_not_connected" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      return json({ error: "telegram_not_connected" }, 400);
     }
 
     if (test) {
@@ -104,30 +117,31 @@ Deno.serve(async (req) => {
         "If you can read this, your Telegram alerts are working ✅",
       ].join("\n");
       const ok = await sendTg(conn.telegram_chat_id, text);
-      return new Response(JSON.stringify({ ok }), { headers: { ...cors, "Content-Type": "application/json" } });
+      return json({ ok });
     }
 
-    if (!alert_id) return new Response(JSON.stringify({ error: "missing alert_id" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+    if (!alert_id) return json({ error: "missing alert_id" }, 400);
 
-    const { data: alert } = await admin.from("alerts").select("*").eq("id", alert_id).eq("parent_id", user.id).maybeSingle();
-    if (!alert) return new Response(JSON.stringify({ error: "alert_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
-    if (alert.telegram_sent) return new Response(JSON.stringify({ ok: true, skipped: "already_sent" }), { headers: { ...cors, "Content-Type": "application/json" } });
+    const { data: alert } = await app.from("alerts").select("*").eq("id", alert_id).maybeSingle();
+    if (!alert) return json({ error: "alert_not_found" }, 404);
+    if (alert.telegram_sent) return json({ ok: true, skipped: "already_sent" });
     if (String(alert.severity || "").toUpperCase() !== "HIGH") {
-      return new Response(JSON.stringify({ ok: false, skipped: "not_high" }), { headers: { ...cors, "Content-Type": "application/json" } });
+      return json({ ok: false, skipped: "not_high" });
     }
 
     let deviceName: string | null = null;
     if (alert.device_id) {
-      const { data: dev } = await admin.from("devices").select("child_name,device_name,device_model").eq("id", alert.device_id).maybeSingle();
+      const { data: dev } = await app.from("devices").select("child_name,device_name,device_model").eq("id", alert.device_id).maybeSingle();
       deviceName = dev?.child_name || dev?.device_name || dev?.device_model || null;
     }
 
     const ok = await sendTg(conn.telegram_chat_id, fmt(alert, deviceName));
     if (ok) {
-      await admin.from("alerts").update({ telegram_sent: true, telegram_sent_at: new Date().toISOString() }).eq("id", alert_id);
+      await app.from("alerts").update({ telegram_sent: true, telegram_sent_at: new Date().toISOString() }).eq("id", alert_id);
     }
-    return new Response(JSON.stringify({ ok }), { headers: { ...cors, "Content-Type": "application/json" } });
+    return json({ ok });
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+    console.error(e);
+    return json({ error: (e as Error).message }, 500);
   }
 });
