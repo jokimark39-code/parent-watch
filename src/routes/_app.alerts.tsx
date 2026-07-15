@@ -1,10 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useRealtimeInvalidate, formatRelative } from "@/lib/realtime";
-import { parseAlertTag, cleanDescription, scanAndCreateAlerts } from "@/lib/risk-scanner";
+import {
+  parseAlertTag,
+  cleanDescription,
+  scanAndCreateAlerts,
+  isSafelisted,
+  classifyApp,
+} from "@/lib/risk-scanner";
+import { classifyAppsWithAi, type AiRiskItem } from "@/lib/ai-classify.functions";
 import { AppIcon } from "@/routes/_app.apps";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, CheckCheck, Check, Search, ShieldAlert, RefreshCw, Info } from "lucide-react";
+import { AlertTriangle, CheckCheck, Check, Search, ShieldAlert, RefreshCw, Info, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/alerts")({
