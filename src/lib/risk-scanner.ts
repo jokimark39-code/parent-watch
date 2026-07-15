@@ -140,7 +140,7 @@ export async function scanAndCreateAlerts(parentId: string) {
       .limit(500),
     supabase
       .from("alerts")
-      .select("id,description,created_at,alert_type")
+      .select("id,message,created_at,alert_type")
       .eq("alert_type", "SUSPICIOUS_APP")
       .gte("created_at", sinceIso),
   ]);
@@ -159,7 +159,7 @@ export async function scanAndCreateAlerts(parentId: string) {
   // Build recent dedupe set from tags in description
   const alertedTags = new Set<string>();
   for (const a of recent) {
-    const desc: string = a.description || "";
+    const desc: string = a.message || "";
     const m = desc.match(/\[pkg:([^\]|]+)(?:\|dev:([^\]]+))?\]/);
     if (m) alertedTags.add(`${m[1]}|${m[2] ?? ""}`);
   }
@@ -229,7 +229,7 @@ export async function scanAndCreateAlerts(parentId: string) {
       alert_type: "SUSPICIOUS_APP",
       severity: sev,
       title: `Suspicious app opened: ${displayName}`,
-      description:
+      message:
         `${displayName} (${c.package_name}) — risk ${r.score} / ${r.classification}. ` +
         `Reasons: ${r.reasons.join("; ") || "keyword match"} ${pkgTag(c.package_name, c.device_id)}`,
       is_read: false,

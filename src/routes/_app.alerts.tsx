@@ -1,10 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useRealtimeInvalidate, formatRelative } from "@/lib/realtime";
-import { parseAlertTag, cleanDescription, scanAndCreateAlerts } from "@/lib/risk-scanner";
+import {
+  parseAlertTag,
+  cleanDescription,
+  scanAndCreateAlerts,
+  isSafelisted,
+  classifyApp,
+} from "@/lib/risk-scanner";
+import { classifyAppsWithAi, type AiRiskItem } from "@/lib/ai-classify.functions";
 import { AppIcon } from "@/routes/_app.apps";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, CheckCheck, Check, Search, ShieldAlert, RefreshCw, Info } from "lucide-react";
+import { AlertTriangle, CheckCheck, Check, Search, ShieldAlert, RefreshCw, Info, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/alerts")({
@@ -47,8 +55,9 @@ function AlertsPage() {
   const appsQ = useQuery({
     queryKey: ["alerts-apps", uid],
     enabled: !!uid,
+    refetchInterval: 15_000,
     queryFn: async () => {
-      const { data } = await supabase.from("installed_apps").select("package_name,app_name,icon_path,device_id");
+      const { data } = await supabase.from("installed_apps").select("*");
       return data ?? [];
     },
   });
@@ -118,6 +127,130 @@ function AlertsPage() {
     onError: (e: any) => toast.error(e.message ?? "Scan failed"),
   });
 
+  const [aiResults, setAiResults] = useState<Map<string, AiRiskItem>>(new Map());
+  const classifyAi = useServerFn(classifyAppsWithAi);
+  const aiScan = useMutation({
+    mutationFn: async () => {
+      const apps = appsQ.data ?? [];
+      // De-duplicate by package_name (installed_apps may repeat per device)
+      const byPkg = new Map<string, { package_name: string; app_name: string | null }>();
+      for (const a of apps) {
+        if (!a.package_name) continue;
+        if (!byPkg.has(a.package_name)) {
+          byPkg.set(a.package_name, {
+            package_name: a.package_name,
+            app_name: a.app_name ?? null,
+          });
+        }
+      }
+      const payload = Array.from(byPkg.values());
+      if (payload.length === 0) return { results: [] as AiRiskItem[] };
+
+      // Chunk to keep prompt small
+      const chunks: typeof payload[] = [];
+      for (let i = 0; i < payload.length; i += 40) chunks.push(payload.slice(i, i + 40));
+
+      const all: AiRiskItem[] = [];
+      for (const c of chunks) {
+        const r = await classifyAi({ data: { apps: c } });
+        if (r.error) throw new Error(r.error);
+        all.push(...r.results);
+      }
+
+      // Also create alerts for HIGH/MEDIUM findings (dedup handled server-side by unique title)
+      if (uid) {
+        const highs = all.filter((x) => x.risk === "HIGH" || x.risk === "MEDIUM");
+        if (highs.length > 0) {
+          // Load recent alerts to dedup by pkg
+          const sinceIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+          const { data: recent } = await supabase
+            .from("alerts")
+            .select("message")
+            .eq("alert_type", "SUSPICIOUS_APP")
+            .gte("created_at", sinceIso);
+          const seen = new Set<string>();
+          for (const a of recent ?? []) {
+            const m = (a.message || "").match(/\[pkg:([^\]|]+)/);
+            if (m) seen.add(m[1]);
+          }
+          // enrich with device_id and app_name from installed_apps
+          const appIndex = new Map<string, any>();
+          for (const a of apps) if (a.package_name && !appIndex.has(a.package_name)) appIndex.set(a.package_name, a);
+          const inserts = highs
+            .filter((x) => !seen.has(x.package_name))
+            .map((x) => {
+              const meta = appIndex.get(x.package_name);
+              const name = meta?.app_name || x.package_name;
+              return {
+                parent_id: uid,
+                device_id: meta?.device_id ?? null,
+                alert_type: "SUSPICIOUS_APP",
+                severity: x.risk === "HIGH" ? "HIGH" : "MEDIUM",
+                title: `AI flagged: ${name}`,
+                message: `${name} (${x.package_name}) — AI risk: ${x.risk}. ${x.reason} [pkg:${x.package_name}]`,
+                is_read: false,
+              };
+            });
+          if (inserts.length > 0) {
+            await supabase.from("alerts").insert(inserts);
+          }
+        }
+      }
+
+      return { results: all };
+    },
+    onSuccess: (r) => {
+      const map = new Map<string, AiRiskItem>();
+      for (const x of r.results) map.set(x.package_name, x);
+      setAiResults(map);
+      const highs = r.results.filter((x) => x.risk === "HIGH").length;
+      const meds = r.results.filter((x) => x.risk === "MEDIUM").length;
+      toast.success(`AI scan complete — ${highs} high, ${meds} medium`);
+      qc.invalidateQueries({ queryKey: ["alerts"] });
+      qc.invalidateQueries({ queryKey: ["alerts-unread-count"] });
+    },
+    onError: (e: any) => toast.error(e.message ?? "AI scan failed"),
+  });
+
+  // Build per-app risk view (local heuristic + AI overlay)
+  const appRiskRows = useMemo(() => {
+    const apps = appsQ.data ?? [];
+    const byPkg = new Map<string, any>();
+    for (const a of apps) {
+      if (!a.package_name) continue;
+      if (!byPkg.has(a.package_name)) byPkg.set(a.package_name, a);
+    }
+    const rows = Array.from(byPkg.values()).map((a) => {
+      const local = classifyApp(a);
+      const safelisted = isSafelisted(a);
+      const ai = aiResults.get(a.package_name);
+      // final = worst of local & AI (unless safelisted and no AI HIGH)
+      let final: "HIGH" | "MEDIUM" | "SAFE" = "SAFE";
+      const localLevel: "HIGH" | "MEDIUM" | "SAFE" =
+        local.classification === "HIGH_RISK" || local.classification === "LIKELY_GAMBLING"
+          ? "HIGH"
+          : local.classification === "NEEDS_REVIEW"
+            ? "MEDIUM"
+            : "SAFE";
+      const aiLevel = ai?.risk ?? "SAFE";
+      const rank = { HIGH: 3, MEDIUM: 2, SAFE: 1 } as const;
+      final = rank[aiLevel] >= rank[localLevel] ? aiLevel : localLevel;
+      if (safelisted && !ai) final = "SAFE";
+      return {
+        app: a,
+        local,
+        ai,
+        final,
+        reason: ai?.reason || local.reasons.join("; ") || (safelisted ? "Safelisted" : "No signals"),
+      };
+    });
+    // Sort HIGH > MEDIUM > SAFE, then name
+    const order = { HIGH: 0, MEDIUM: 1, SAFE: 2 } as const;
+    rows.sort((a, b) => order[a.final] - order[b.final] || String(a.app.app_name || "").localeCompare(String(b.app.app_name || "")));
+    return rows;
+  }, [appsQ.data, aiResults]);
+
+
   const list = useMemo(() => {
     let l = alertsQ.data ?? [];
     if (filter === "unread") l = l.filter((a: any) => !(a.is_read ?? a.read));
@@ -129,10 +262,10 @@ function AlertsPage() {
     if (search.trim()) {
       const s = search.toLowerCase();
       l = l.filter((a: any) => {
-        const tag = parseAlertTag(a.description);
+        const tag = parseAlertTag(a.message);
         return (
           (a.title || "").toLowerCase().includes(s) ||
-          (a.description || "").toLowerCase().includes(s) ||
+          (a.message || "").toLowerCase().includes(s) ||
           (tag.pkg || "").toLowerCase().includes(s)
         );
       });
@@ -168,10 +301,20 @@ function AlertsPage() {
               </p>
             </div>
           </div>
-          <Button size="sm" variant="outline" onClick={() => rescan.mutate()} disabled={rescan.isPending}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${rescan.isPending ? "animate-spin" : ""}`} />
-            Run scan now
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => rescan.mutate()} disabled={rescan.isPending}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${rescan.isPending ? "animate-spin" : ""}`} />
+              Local scan
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => aiScan.mutate()}
+              disabled={aiScan.isPending || (appsQ.data ?? []).length === 0}
+            >
+              <Sparkles className={`mr-2 h-4 w-4 ${aiScan.isPending ? "animate-pulse" : ""}`} />
+              {aiScan.isPending ? "AI scanning…" : "Scan all with AI"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -186,6 +329,56 @@ function AlertsPage() {
               AI risk detection is an estimate. Please review flagged apps before making decisions.
             </AlertDescription>
           </Alert>
+
+          {/* All installed apps with risk classification */}
+          <div className="rounded-lg border">
+            <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
+              <div className="text-sm font-medium">
+                All installed apps ({appRiskRows.length})
+              </div>
+              <div className="flex gap-2 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-destructive" /> High
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-yellow-500" /> Medium
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> Safe
+                </span>
+              </div>
+            </div>
+            <div className="max-h-96 overflow-y-auto divide-y">
+              {appRiskRows.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No installed apps yet.
+                </div>
+              ) : (
+                appRiskRows.map((row) => (
+                  <div key={row.app.package_name} className="flex items-start gap-3 px-3 py-2">
+                    <AppIcon name={row.app.icon_path || row.app.package_name} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium truncate">
+                          {row.app.app_name || row.app.package_name}
+                        </span>
+                        <RiskDot level={row.final} />
+                        {row.ai && (
+                          <Badge variant="outline" className="text-[10px]">AI: {row.ai.risk}</Badge>
+                        )}
+                      </div>
+                      <div className="font-mono text-[11px] text-muted-foreground truncate">
+                        {row.app.package_name}
+                      </div>
+                      <div className="text-xs text-muted-foreground line-clamp-2">
+                        {row.reason}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -229,7 +422,7 @@ function AlertsPage() {
           ) : (
             list.map((a: any) => {
               const isRead = a.is_read ?? a.read;
-              const tag = parseAlertTag(a.description);
+              const tag = parseAlertTag(a.message);
               const pkg = tag.pkg;
               const app = pkg ? iconByPkg.get(pkg) : undefined;
               const device = a.device_id ? deviceById.get(a.device_id) : undefined;
@@ -256,7 +449,7 @@ function AlertsPage() {
                       <div className="mt-0.5 font-mono text-xs text-muted-foreground truncate">{pkg}</div>
                     )}
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {cleanDescription(a.description) || "No details."}
+                      {cleanDescription(a.message) || "No details."}
                     </p>
                     <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                       {device && <span>Device: {device.child_name || device.device_name || device.device_model}</span>}
@@ -310,4 +503,18 @@ function SeverityBadge({ s }: { s?: string }) {
         ? "default"
         : "secondary";
   return <Badge variant={variant as any}>{key}</Badge>;
+}
+
+function RiskDot({ level }: { level: "HIGH" | "MEDIUM" | "SAFE" }) {
+  const cls =
+    level === "HIGH"
+      ? "bg-destructive text-destructive-foreground"
+      : level === "MEDIUM"
+        ? "bg-yellow-500 text-black"
+        : "bg-emerald-500 text-white";
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${cls}`}>
+      {level}
+    </span>
+  );
 }
