@@ -65,7 +65,7 @@ function AlertsPage() {
     queryKey: ["alerts-devices", uid],
     enabled: !!uid,
     queryFn: async () => {
-      const { data } = await supabase.from("devices").select("id,child_name,device_name,device_model");
+      const { data } = await supabase.from("devices").select("id,name,model");
       return data ?? [];
     },
   });
