@@ -1,22 +1,22 @@
 // Supabase Edge Function: send-telegram-alert
 // Deploy: `supabase functions deploy send-telegram-alert`
 //
-// Called by the dashboard (authenticated user) to send a Telegram message
-// for one alert id, or a test message. Uses service role to look up the
-// caller's telegram_connections row and to mark the alert as sent.
-//
-// Secrets required:
-//   TELEGRAM_BOT_TOKEN
+// Uses the Lovable connector gateway for Telegram (no bot token needed).
+// Secrets required (Supabase → Edge Functions → Secrets):
+//   LOVABLE_API_KEY
+//   TELEGRAM_API_KEY
 //   SUPABASE_URL
 //   SUPABASE_SERVICE_ROLE_KEY
 //   DASHBOARD_URL (optional)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+const TELEGRAM_API_KEY = Deno.env.get("TELEGRAM_API_KEY")!;
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DASHBOARD_URL = Deno.env.get("DASHBOARD_URL") ?? "";
+const GATEWAY = "https://connector-gateway.lovable.dev/telegram";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -27,12 +27,26 @@ const cors = {
 const admin = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
 
 async function sendTg(chatId: string, text: string) {
-  const r = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+  const r = await fetch(`${GATEWAY}/sendMessage`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      "X-Connection-Api-Key": TELEGRAM_API_KEY,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
   });
-  return r.ok;
+  if (!r.ok) {
+    const body = await r.text();
+    console.error(`Telegram gateway failed [${r.status}]: ${body}`);
+    return false;
+  }
+  const data = await r.json().catch(() => ({}));
+  if (data && data.ok === false) {
+    console.error(`Telegram error: ${JSON.stringify(data)}`);
+    return false;
+  }
+  return true;
 }
 
 function fmt(alert: any, deviceName?: string | null) {

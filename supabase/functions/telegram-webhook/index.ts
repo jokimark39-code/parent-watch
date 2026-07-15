@@ -1,26 +1,42 @@
 // Supabase Edge Function: telegram-webhook
 // Deploy: `supabase functions deploy telegram-webhook --no-verify-jwt`
-// Set webhook: https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<project>.supabase.co/functions/v1/telegram-webhook
 //
-// Secrets required (Supabase → Edge Functions → Secrets):
-//   TELEGRAM_BOT_TOKEN
+// Uses the Lovable connector gateway for Telegram (no bot token needed).
+// Register webhook via the gateway:
+//   POST https://connector-gateway.lovable.dev/telegram/setWebhook
+//   Headers: Authorization: Bearer $LOVABLE_API_KEY, X-Connection-Api-Key: $TELEGRAM_API_KEY
+//   Body: { "url": "https://<project>.supabase.co/functions/v1/telegram-webhook" }
+//
+// Secrets required:
+//   LOVABLE_API_KEY
+//   TELEGRAM_API_KEY
 //   SUPABASE_URL
 //   SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+const TELEGRAM_API_KEY = Deno.env.get("TELEGRAM_API_KEY")!;
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const GATEWAY = "https://connector-gateway.lovable.dev/telegram";
 
 const admin = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
 
 async function reply(chat_id: number | string, text: string) {
-  await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+  const r = await fetch(`${GATEWAY}/sendMessage`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      "X-Connection-Api-Key": TELEGRAM_API_KEY,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ chat_id, text, parse_mode: "HTML" }),
   });
+  if (!r.ok) {
+    const body = await r.text();
+    console.error(`Telegram gateway failed [${r.status}]: ${body}`);
+  }
 }
 
 Deno.serve(async (req) => {
