@@ -53,22 +53,36 @@ export type Database = {
         }
         Relationships: []
       }
+      telegram_link_attempts: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          link_code: string
+          telegram_chat_id: string
+          telegram_username: string | null
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          link_code: string
+          telegram_chat_id: string
+          telegram_username?: string | null
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          link_code?: string
+          telegram_chat_id?: string
+          telegram_username?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      tg_link_chat: {
-        Args: { _chat_id: string; _code: string; _username?: string }
-        Returns: boolean
-      }
-      tg_status_by_chat: {
-        Args: { _chat_id: string }
-        Returns: {
-          email: string
-          is_connected: boolean
-        }[]
-      }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
