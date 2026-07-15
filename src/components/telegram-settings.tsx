@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useRealtimeInvalidate } from "@/lib/realtime";
+import { claimTelegramLinkAttempt } from "@/lib/telegram-link.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,12 +13,12 @@ import { Copy, Send, Sparkles, Trash2, Info, MessageCircle } from "lucide-react"
 import { toast } from "sonner";
 
 const BOT_USERNAME =
-  (import.meta as any).env?.VITE_TELEGRAM_BOT_USERNAME || "YOUR_BOT_USERNAME";
+  (import.meta as any).env?.VITE_TELEGRAM_BOT_USERNAME || "Yat_Lite_Bot";
 
 function genCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let s = "";
-  for (let i = 0; i < 5; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  for (let i = 0; i < 8; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
   return `TG-${s}`;
 }
 
@@ -24,6 +26,8 @@ export function TelegramSettings() {
   const { user } = useAuth();
   const uid = user?.id;
   const qc = useQueryClient();
+  const claimTelegramLink = useServerFn(claimTelegramLinkAttempt);
+  const claimingCode = useRef<string | null>(null);
   useRealtimeInvalidate("telegram_connections", [["telegram-connection"]], uid);
 
   const connQ = useQuery({
@@ -88,6 +92,49 @@ export function TelegramSettings() {
   });
 
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    const conn = connQ.data;
+    if (!user || !conn?.link_code || conn.is_connected) return;
+    const code = String(conn.link_code).trim().toUpperCase();
+    if (claimingCode.current === code) return;
+
+    let cancelled = false;
+    claimingCode.current = code;
+
+    (async () => {
+      try {
+        const claimed = await claimTelegramLink({ data: { code } });
+        if (cancelled || !claimed.linked) return;
+
+        const now = new Date().toISOString();
+        const { error } = await supabase
+          .from("telegram_connections")
+          .update({
+            telegram_chat_id: claimed.telegram_chat_id,
+            telegram_username: claimed.telegram_username,
+            is_connected: true,
+            connected_at: now,
+            updated_at: now,
+          })
+          .eq("parent_id", user.id)
+          .eq("link_code", code);
+
+        if (error) throw error;
+        toast.success("Telegram connected");
+        qc.invalidateQueries({ queryKey: ["telegram-connection"] });
+      } catch (e: any) {
+        console.error("Telegram claim failed", e);
+      } finally {
+        if (claimingCode.current === code) claimingCode.current = null;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [claimTelegramLink, connQ.data, qc, user]);
+
   async function sendTest() {
     setSending(true);
     try {

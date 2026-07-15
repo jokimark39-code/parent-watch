@@ -99,3 +99,25 @@ $$;
 
 REVOKE ALL ON FUNCTION public.tg_status_by_chat(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.tg_status_by_chat(text) TO anon, authenticated, service_role;
+
+-- If you use the Lovable Cloud webhook handoff flow, run this in the Lovable
+-- backend instead of the external app database. It stores /start CODE attempts
+-- until the dashboard claims them.
+CREATE TABLE IF NOT EXISTS public.telegram_link_attempts (
+  link_code text PRIMARY KEY,
+  telegram_chat_id text NOT NULL,
+  telegram_username text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  consumed_at timestamptz
+);
+
+GRANT ALL ON public.telegram_link_attempts TO service_role;
+ALTER TABLE public.telegram_link_attempts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "backend can manage telegram link attempts" ON public.telegram_link_attempts;
+CREATE POLICY "backend can manage telegram link attempts"
+ON public.telegram_link_attempts
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
