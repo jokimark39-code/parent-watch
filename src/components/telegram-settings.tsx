@@ -168,7 +168,16 @@ export function TelegramSettings() {
               Get instant Telegram messages when a HIGH-risk gambling app is detected.
             </CardDescription>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {isPremium ? (
+              <Badge className="bg-amber-500 hover:bg-amber-500">
+                <Crown className="mr-1 h-3 w-3" /> Premium Active
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+                <Lock className="mr-1 h-3 w-3" /> Premium Required
+              </Badge>
+            )}
             {conn?.is_connected ? (
               <Badge className="bg-emerald-600 hover:bg-emerald-600">Connected</Badge>
             ) : (
@@ -179,7 +188,20 @@ export function TelegramSettings() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {conn?.is_connected ? (
+        {!isPremium ? (
+          <>
+            <Alert>
+              <Crown className="h-4 w-4" />
+              <AlertTitle>Telegram Alerts is a Premium feature</AlertTitle>
+              <AlertDescription className="text-xs">
+                Upgrade to unlock instant Telegram notifications for high-risk app detections.
+              </AlertDescription>
+            </Alert>
+            <Button onClick={() => setUpgradeOpen(true)} className="bg-amber-500 hover:bg-amber-600">
+              <Crown className="mr-2 h-4 w-4" /> Upgrade to Premium
+            </Button>
+          </>
+        ) : conn?.is_connected ? (
           <>
             <Alert>
               <Sparkles className="h-4 w-4" />
