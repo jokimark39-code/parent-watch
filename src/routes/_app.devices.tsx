@@ -35,7 +35,7 @@ function DevicesPage() {
   useRealtimeInvalidate("installed_apps", [["devices"]], uid);
 
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<"last_seen" | "device_name" | "device_model">("last_seen");
+  const [sort, setSort] = useState<"last_seen" | "name" | "model">("last_seen");
   const [page, setPage] = useState(1);
   const PAGE = 10;
   const [viewing, setViewing] = useState<any | null>(null);
@@ -68,15 +68,20 @@ function DevicesPage() {
 
   const rename = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const { error } = await supabase.from("devices").update({ device_name: name }).eq("id", id);
+      if (!uid) throw new Error("Not signed in");
+      const { error } = await supabase
+        .from("devices")
+        .update({ name })
+        .eq("id", id)
+        .eq("parent_id", uid);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Device renamed");
+      toast.success("Device name updated successfully.");
       setEditingId(null);
       qc.invalidateQueries({ queryKey: ["devices"] });
     },
-    onError: (e: any) => toast.error(e.message ?? "Failed to rename"),
+    onError: () => toast.error("Could not update device name. Please try again."),
   });
 
   const rows = useMemo(() => {
@@ -84,8 +89,8 @@ function DevicesPage() {
       if (!q) return true;
       const s = q.toLowerCase();
       return (
-        (d.device_name || "").toLowerCase().includes(s) ||
-        (d.device_model || "").toLowerCase().includes(s)
+        (d.name || "").toLowerCase().includes(s) ||
+        (d.model || "").toLowerCase().includes(s)
       );
     });
     list.sort((a: any, b: any) => {
@@ -103,6 +108,23 @@ function DevicesPage() {
 
   const paged = rows.slice((page - 1) * PAGE, page * PAGE);
   const pages = Math.max(1, Math.ceil(rows.length / PAGE));
+
+  const startEdit = (d: any) => {
+    setEditingId(d.id);
+    setEditValue(d.name || "");
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditValue("");
+  };
+  const saveEdit = (id: string) => {
+    const trimmed = editValue.trim();
+    if (!trimmed) {
+      toast.error("Device name cannot be empty.");
+      return;
+    }
+    rename.mutate({ id, name: trimmed });
+  };
 
   return (
     <div className="space-y-4">
@@ -126,8 +148,8 @@ function DevicesPage() {
               value={sort} onChange={(e) => setSort(e.target.value as any)}
             >
               <option value="last_seen">Last seen</option>
-              <option value="device_name">Device name</option>
-              <option value="device_model">Model</option>
+              <option value="name">Device name</option>
+              <option value="model">Model</option>
             </select>
           </div>
         </CardHeader>
@@ -141,78 +163,99 @@ function DevicesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Device</TableHead>
+                    <TableHead>Device Name</TableHead>
                     <TableHead>Model</TableHead>
-                    <TableHead>Last seen</TableHead>
+                    <TableHead>Android Version</TableHead>
+                    <TableHead>Last Seen</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Apps</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paged.map((d: any) => (
-                    <TableRow key={d.id}>
-                      <TableCell className="font-medium">
-                        {editingId === d.id ? (
-                          <div className="flex items-center gap-1">
+                  {paged.map((d: any) => {
+                    const isEditing = editingId === d.id;
+                    return (
+                      <TableRow key={d.id}>
+                        <TableCell className="font-medium">
+                          {isEditing ? (
                             <Input
                               autoFocus
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
                               onKeyDown={(e) => {
-                                if (e.key === "Enter" && editValue.trim()) rename.mutate({ id: d.id, name: editValue.trim() });
-                                if (e.key === "Escape") setEditingId(null);
+                                if (e.key === "Enter") saveEdit(d.id);
+                                if (e.key === "Escape") cancelEdit();
                               }}
-                              className="h-8 w-40"
+                              className="h-8 w-48"
+                              placeholder="Device name"
                             />
-                            <Button size="icon" variant="ghost" className="h-8 w-8" disabled={!editValue.trim() || rename.isPending}
-                              onClick={() => rename.mutate({ id: d.id, name: editValue.trim() })}>
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingId(null)}>
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1 group">
-                            <span>{d.device_name || d.device_model || "Unnamed device"}</span>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100"
-                              onClick={() => { setEditingId(d.id); setEditValue(d.device_name || ""); }}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>{d.device_model || d.manufacturer || "—"}</TableCell>
-                      <TableCell>{formatRelative(d.last_seen)}</TableCell>
-                      <TableCell>
-                        <Badge variant={isOnline(d.last_seen) ? "default" : "secondary"}>
-                          {isOnline(d.last_seen) ? "Online" : "Offline"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{appsCount[d.id] ?? 0}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => setViewing(d)}><Eye className="h-4 w-4" /></Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete this device?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This removes {d.device_name || d.device_model || "the device"} from your dashboard.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => del.mutate(d.id)}>Delete</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          ) : (
+                            <span>{d.name || "Unnamed device"}</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{d.model || "—"}</TableCell>
+                        <TableCell>{d.os_version || "—"}</TableCell>
+                        <TableCell>{formatRelative(d.last_seen)}</TableCell>
+                        <TableCell>
+                          <Badge variant={isOnline(d.last_seen) ? "default" : "secondary"}>
+                            {isOnline(d.last_seen) ? "Online" : "Offline"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{appsCount[d.id] ?? 0}</TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          {isEditing ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={!editValue.trim() || rename.isPending}
+                                onClick={() => saveEdit(d.id)}
+                              >
+                                <Check className="h-4 w-4 mr-1" /> Save
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={cancelEdit}>
+                                <X className="h-4 w-4 mr-1" /> Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Edit name"
+                                onClick={() => startEdit(d)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" title="View details" onClick={() => setViewing(d)}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" title="Delete">
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete this device?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This removes {d.name || d.model || "the device"} from your dashboard.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => del.mutate(d.id)}>Delete</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -231,12 +274,12 @@ function DevicesPage() {
 
       <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{viewing?.device_name || viewing?.device_model || "Device"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{viewing?.name || viewing?.model || "Device"}</DialogTitle></DialogHeader>
           {viewing && (
             <dl className="grid grid-cols-2 gap-2 text-sm">
-              <dt className="text-muted-foreground">Name</dt><dd>{viewing.device_name || "—"}</dd>
-              <dt className="text-muted-foreground">Model</dt><dd>{viewing.device_model || "—"}</dd>
-              <dt className="text-muted-foreground">Manufacturer</dt><dd>{viewing.manufacturer || "—"}</dd>
+              <dt className="text-muted-foreground">Name</dt><dd>{viewing.name || "—"}</dd>
+              <dt className="text-muted-foreground">Model</dt><dd>{viewing.model || "—"}</dd>
+              <dt className="text-muted-foreground">Android version</dt><dd>{viewing.os_version || "—"}</dd>
               <dt className="text-muted-foreground">Last seen</dt><dd>{formatRelative(viewing.last_seen)}</dd>
               <dt className="text-muted-foreground">Installed apps</dt><dd>{appsCount[viewing.id] ?? 0}</dd>
             </dl>
