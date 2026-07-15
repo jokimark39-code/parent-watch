@@ -33,7 +33,7 @@ function DashboardPage() {
     queryFn: async () => {
       const [devicesR, appsR, alertsR, usageR] = await Promise.all([
         supabase.from("devices").select("*").order("last_seen", { ascending: false }),
-        supabase.from("installed_apps").select("*").order("install_date", { ascending: false, nullsFirst: false }),
+        supabase.from("installed_apps").select("*").order("created_at", { ascending: false, nullsFirst: false }),
         supabase.from("alerts").select("*").order("created_at", { ascending: false }).limit(50),
         supabase
           .from("usage_events")
