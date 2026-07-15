@@ -80,7 +80,18 @@ function AppsPage() {
       )}
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Installed Apps</CardTitle>
+          <div className="flex items-center gap-3">
+            <CardTitle>Installed Apps</CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => q.refetch()}
+              disabled={q.isFetching}
+              aria-label="Refresh apps"
+            >
+              <RefreshCw className={`h-4 w-4 ${q.isFetching ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-2">
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
