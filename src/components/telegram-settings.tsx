@@ -42,11 +42,13 @@ export function TelegramSettings() {
         .select("is_premium, premium_plan, premium_activated_at")
         .eq("id", uid!)
         .maybeSingle();
-      if (error && !/no rows/i.test(error.message)) throw error;
+      if (error && !/no rows/i.test(error.message)) return null;
       return data;
     },
   });
-  const isPremium = !!profileQ.data?.is_premium;
+  const localPremium =
+    typeof window !== "undefined" && !!uid && localStorage.getItem(`premium:${uid}`) === "1";
+  const isPremium = !!profileQ.data?.is_premium || localPremium;
 
   const connQ = useQuery({
     queryKey: ["telegram-connection", uid],
