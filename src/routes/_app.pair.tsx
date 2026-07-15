@@ -13,8 +13,8 @@ export const Route = createFileRoute("/_app/pair")({
   component: PairPage,
 });
 
-const CODE_TTL_SEC = 300; // 5 minutes
-const STATUS_WAITING = "WAITING";
+const CODE_TTL_SEC = 30 * 60; // 30 minutes
+const STATUS_WAITING = "waiting";
 const STATUS_PAIRED = "paired";
 const STATUS_EXPIRED = "expired";
 const STATUS_CANCELLED = "cancelled";
@@ -24,11 +24,11 @@ function normalizeStatus(status?: string | null) {
 }
 
 function makeCode(): string {
-  // 6-char alphanumeric, ambiguity removed (no O/0/I/1)
+  // 6-char uppercase alphanumeric, ambiguity removed (no O/0/I/1)
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let s = "";
   for (let i = 0; i < 6; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
-  return s;
+  return s.toUpperCase().replace(/\s+/g, "");
 }
 
 function PairPage() {
@@ -71,24 +71,23 @@ function PairPage() {
     if (!user) return;
     setBusy(true);
     try {
-      // Retire any prior waiting code for this parent. Best-effort:
-      // ignore RLS/permission errors so we can still generate a fresh code.
+      // Expire prior waiting codes for this parent. Best-effort.
       await supabase
         .from("pairing_codes")
-        .update({ status: STATUS_CANCELLED })
+        .update({ status: STATUS_EXPIRED })
         .eq("parent_id", user.id)
-        .in("status", [STATUS_WAITING, "waiting"]);
+        .eq("status", "waiting");
 
       const expires = new Date(Date.now() + CODE_TTL_SEC * 1000).toISOString();
-      const statusVariants = [STATUS_WAITING, "waiting"];
       let lastErr: any = null;
       for (let attempt = 0; attempt < 6; attempt++) {
         const code = makeCode();
-        const status = statusVariants[Math.min(attempt, statusVariants.length - 1)];
         const { data, error } = await supabase.from("pairing_codes").insert({
           code,
           parent_id: user.id,
-          status,
+          status: "waiting",
+          device_id: null,
+          used_at: null,
           expires_at: expires,
         }).select().single();
         if (!error && data) {
@@ -98,9 +97,8 @@ function PairPage() {
           return;
         }
         lastErr = error;
-        // retry on unique-violation; also try alternate status on RLS violation
         const msg = error?.message ?? "";
-        if (!/duplicate|unique|row-level security|violates/i.test(msg)) break;
+        if (!/duplicate|unique/i.test(msg)) break;
       }
       throw lastErr ?? new Error("Could not generate a unique code");
     } catch (e: any) {
@@ -156,6 +154,17 @@ function PairPage() {
                     </span>
                   )}
                 </div>
+              </div>
+              <p className="text-center text-sm text-muted-foreground">
+                Enter this code on the child phone: <span className="font-mono font-semibold text-foreground">{current.code}</span>
+                <br />
+                Expires at {new Date(current.expires_at).toLocaleString()}
+              </p>
+              <div className="rounded-lg border bg-muted/30 p-3 text-xs font-mono space-y-1">
+                <div><span className="text-muted-foreground">code:</span> {current.code}</div>
+                <div><span className="text-muted-foreground">status:</span> {current.status}</div>
+                <div><span className="text-muted-foreground">expires_at:</span> {current.expires_at}</div>
+                <div><span className="text-muted-foreground">device_id:</span> {String(current.device_id ?? "null")}</div>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <Button
