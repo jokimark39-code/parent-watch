@@ -21,7 +21,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
+import { useRealtimeInvalidate } from "@/lib/realtime";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 const nav = [
@@ -37,6 +41,22 @@ const nav = [
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { signOut, user } = useAuth();
+  const uid = user?.id;
+
+  useRealtimeInvalidate("alerts", [["alerts-unread-count"]], uid);
+  const unreadQ = useQuery({
+    queryKey: ["alerts-unread-count", uid],
+    enabled: !!uid,
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("alerts")
+        .select("id", { count: "exact", head: true })
+        .eq("is_read", false);
+      return count ?? 0;
+    },
+  });
+  const unread = unreadQ.data ?? 0;
 
   return (
     <Sidebar collapsible="icon">
@@ -57,12 +77,18 @@ export function AppSidebar() {
             <SidebarMenu>
               {nav.map((item) => {
                 const active = pathname === item.url || pathname.startsWith(item.url + "/");
+                const isAlerts = item.url === "/alerts";
                 return (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
                       <Link to={item.url}>
                         <item.icon />
-                        <span>{item.title}</span>
+                        <span className="flex-1">{item.title}</span>
+                        {isAlerts && unread > 0 && (
+                          <Badge variant="destructive" className="ml-auto h-5 min-w-5 justify-center px-1.5 text-[10px]">
+                            {unread > 99 ? "99+" : unread}
+                          </Badge>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

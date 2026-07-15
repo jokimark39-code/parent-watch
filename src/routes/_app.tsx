@@ -4,6 +4,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
+import { useAlertScanner } from "@/hooks/use-alert-scanner";
+
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -22,6 +24,8 @@ const titles: Record<string, string> = {
 function AppLayout() {
   const { session, loading } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useAlertScanner();
+
 
   if (loading) {
     return (
