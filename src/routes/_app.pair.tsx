@@ -63,6 +63,15 @@ function PairPage() {
     if (!user) return;
     setBusy(true);
     try {
+      // Keep only one active pairing code per parent. Some backends enforce this
+      // with a unique constraint, so retire the previous WAITING code before insert.
+      const { error: retireError } = await supabase
+        .from("pairing_codes")
+        .update({ status: "CANCELLED" })
+        .eq("parent_id", user.id)
+        .eq("status", "WAITING");
+      if (retireError) throw retireError;
+
       const expires = new Date(Date.now() + CODE_TTL_SEC * 1000).toISOString();
       let lastErr: any = null;
       for (let attempt = 0; attempt < 5; attempt++) {
