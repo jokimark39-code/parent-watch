@@ -24,11 +24,11 @@ function normalizeStatus(status?: string | null) {
 }
 
 function makeCode(): string {
-  // 6-char alphanumeric, ambiguity removed (no O/0/I/1)
+  // 6-char uppercase alphanumeric, ambiguity removed (no O/0/I/1)
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let s = "";
   for (let i = 0; i < 6; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
-  return s;
+  return s.toUpperCase().replace(/\s+/g, "");
 }
 
 function PairPage() {
