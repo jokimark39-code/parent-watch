@@ -9,8 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Copy, Send, Sparkles, Trash2, Info, MessageCircle } from "lucide-react";
+import { Copy, Send, Sparkles, Trash2, Info, MessageCircle, Crown, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
 
 const BOT_USERNAME =
   (import.meta as any).env?.VITE_TELEGRAM_BOT_USERNAME || "Yat_Lite_Bot";
@@ -29,7 +30,23 @@ export function TelegramSettings() {
   const claimTelegramLink = useServerFn(claimTelegramLinkAttempt);
   const sendTelegram = useServerFn(sendTelegramAlert);
   const claimingCode = useRef<string | null>(null);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   useRealtimeInvalidate("telegram_connections", [["telegram-connection"]], uid);
+
+  const profileQ = useQuery({
+    queryKey: ["profile-premium", uid],
+    enabled: !!uid,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("is_premium, premium_plan, premium_activated_at")
+        .eq("id", uid!)
+        .maybeSingle();
+      if (error && !/no rows/i.test(error.message)) throw error;
+      return data;
+    },
+  });
+  const isPremium = !!profileQ.data?.is_premium;
 
   const connQ = useQuery({
     queryKey: ["telegram-connection", uid],
@@ -151,7 +168,16 @@ export function TelegramSettings() {
               Get instant Telegram messages when a HIGH-risk gambling app is detected.
             </CardDescription>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {isPremium ? (
+              <Badge className="bg-amber-500 hover:bg-amber-500">
+                <Crown className="mr-1 h-3 w-3" /> Premium Active
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+                <Lock className="mr-1 h-3 w-3" /> Premium Required
+              </Badge>
+            )}
             {conn?.is_connected ? (
               <Badge className="bg-emerald-600 hover:bg-emerald-600">Connected</Badge>
             ) : (
@@ -162,7 +188,20 @@ export function TelegramSettings() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {conn?.is_connected ? (
+        {!isPremium ? (
+          <>
+            <Alert>
+              <Crown className="h-4 w-4" />
+              <AlertTitle>Telegram Alerts is a Premium feature</AlertTitle>
+              <AlertDescription className="text-xs">
+                Upgrade to unlock instant Telegram notifications for high-risk app detections.
+              </AlertDescription>
+            </Alert>
+            <Button onClick={() => setUpgradeOpen(true)} className="bg-amber-500 hover:bg-amber-600">
+              <Crown className="mr-2 h-4 w-4" /> Upgrade to Premium
+            </Button>
+          </>
+        ) : conn?.is_connected ? (
           <>
             <Alert>
               <Sparkles className="h-4 w-4" />
@@ -270,6 +309,11 @@ export function TelegramSettings() {
           </ol>
         </details>
       </CardContent>
+      <PremiumUpgradeModal
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        onActivated={() => qc.invalidateQueries({ queryKey: ["profile-premium"] })}
+      />
     </Card>
   );
 }
