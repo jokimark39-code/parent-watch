@@ -71,24 +71,23 @@ function PairPage() {
     if (!user) return;
     setBusy(true);
     try {
-      // Retire any prior waiting code for this parent. Best-effort:
-      // ignore RLS/permission errors so we can still generate a fresh code.
+      // Expire prior waiting codes for this parent. Best-effort.
       await supabase
         .from("pairing_codes")
-        .update({ status: STATUS_CANCELLED })
+        .update({ status: STATUS_EXPIRED })
         .eq("parent_id", user.id)
-        .in("status", [STATUS_WAITING, "waiting"]);
+        .eq("status", "waiting");
 
       const expires = new Date(Date.now() + CODE_TTL_SEC * 1000).toISOString();
-      const statusVariants = [STATUS_WAITING, "waiting"];
       let lastErr: any = null;
       for (let attempt = 0; attempt < 6; attempt++) {
         const code = makeCode();
-        const status = statusVariants[Math.min(attempt, statusVariants.length - 1)];
         const { data, error } = await supabase.from("pairing_codes").insert({
           code,
           parent_id: user.id,
-          status,
+          status: "waiting",
+          device_id: null,
+          used_at: null,
           expires_at: expires,
         }).select().single();
         if (!error && data) {
@@ -98,9 +97,8 @@ function PairPage() {
           return;
         }
         lastErr = error;
-        // retry on unique-violation; also try alternate status on RLS violation
         const msg = error?.message ?? "";
-        if (!/duplicate|unique|row-level security|violates/i.test(msg)) break;
+        if (!/duplicate|unique/i.test(msg)) break;
       }
       throw lastErr ?? new Error("Could not generate a unique code");
     } catch (e: any) {
