@@ -2,9 +2,9 @@
 // Publishable/anon key is safe to expose in the browser.
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = "https://alszphuivwbnxyxieamb.supabase.co";
+const SUPABASE_URL = "https://iuuvannpblamllbsqtfl.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY =
-  "sb_publishable_KvUvtEZkPBX6yE_EvzSAZg_Gd8Z56ex";
+  "sb_publishable_cXZHltdEI5WB4GKzjcwdQg_u3RJlPZ1";
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
