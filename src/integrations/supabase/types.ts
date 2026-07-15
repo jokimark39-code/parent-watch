@@ -14,7 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      telegram_connections: {
+        Row: {
+          connected_at: string | null
+          created_at: string
+          email: string | null
+          id: string
+          is_connected: boolean
+          link_code: string | null
+          parent_id: string
+          telegram_chat_id: string | null
+          telegram_username: string | null
+          updated_at: string
+        }
+        Insert: {
+          connected_at?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_connected?: boolean
+          link_code?: string | null
+          parent_id: string
+          telegram_chat_id?: string | null
+          telegram_username?: string | null
+          updated_at?: string
+        }
+        Update: {
+          connected_at?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_connected?: boolean
+          link_code?: string | null
+          parent_id?: string
+          telegram_chat_id?: string | null
+          telegram_username?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
