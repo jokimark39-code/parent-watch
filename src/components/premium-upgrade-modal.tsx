@@ -213,7 +213,7 @@ export function PremiumUpgradeModal({
           <Button onClick={submit} disabled={submitting}>
             {submitting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking payment…
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Activating Premium…
               </>
             ) : (
               <>
