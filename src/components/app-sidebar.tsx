@@ -32,7 +32,7 @@ const nav = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Devices", url: "/devices", icon: Smartphone },
   { title: "Pair Device", url: "/pair", icon: QrCode },
-  { title: "Installed Apps", url: "/apps", icon: AppWindow },
+  { title: "Visited Apps", url: "/apps", icon: AppWindow },
   { title: "Usage", url: "/usage", icon: BarChart3 },
   { title: "Alerts", url: "/alerts", icon: Bell },
   { title: "Settings", url: "/settings", icon: Settings },
