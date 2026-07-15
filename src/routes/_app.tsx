@@ -5,6 +5,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
 import { useAlertScanner } from "@/hooks/use-alert-scanner";
+import { useTelegramNotifier } from "@/hooks/use-telegram-notifier";
 
 
 export const Route = createFileRoute("/_app")({
@@ -25,6 +26,8 @@ function AppLayout() {
   const { session, loading } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useAlertScanner();
+  useTelegramNotifier();
+
 
 
   if (loading) {

@@ -13,6 +13,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { TelegramSettings } from "@/components/telegram-settings";
 
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsPage,
@@ -108,6 +109,8 @@ function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <TelegramSettings />
 
       <Card>
         <CardHeader><CardTitle>Password</CardTitle></CardHeader>
