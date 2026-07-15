@@ -13,7 +13,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Search, AlertTriangle, Package } from "lucide-react";
+import { Search, AlertTriangle, Package, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/_app/apps")({
   component: AppsPage,
@@ -22,26 +22,32 @@ export const Route = createFileRoute("/_app/apps")({
 function AppsPage() {
   const { user } = useAuth();
   const uid = user?.id;
-  useRealtimeInvalidate("installed_apps", [["apps"]], uid);
+  useRealtimeInvalidate("installed_apps", [["apps", uid ?? ""]], uid);
 
   const q = useQuery({
     queryKey: ["apps", uid],
     enabled: !!uid,
+    staleTime: 0,
     refetchInterval: 5000,
+    refetchIntervalInBackground: true,
     queryFn: async () => {
-      const { data, error } = await supabase.from("installed_apps").select("*");
-      return { data: data ?? [], error };
+      const { data, error } = await supabase
+        .from("installed_apps")
+        .select("*")
+        .order("install_date", { ascending: false, nullsFirst: false });
+      if (error) throw error;
+      return data ?? [];
     },
   });
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "high" | "review" | "safe">("all");
-  const [sort, setSort] = useState<"install_date" | "risk" | "app_name">("risk");
+  const [sort, setSort] = useState<"install_date" | "risk" | "app_name">("install_date");
   const [page, setPage] = useState(1);
   const PAGE = 15;
 
   const rows = useMemo(() => {
-    let list = q.data?.data ?? [];
+    let list = q.data ?? [];
     if (search) {
       const s = search.toLowerCase();
       list = list.filter((a: any) =>
@@ -74,7 +80,18 @@ function AppsPage() {
       )}
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Installed Apps</CardTitle>
+          <div className="flex items-center gap-3">
+            <CardTitle>Installed Apps</CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => q.refetch()}
+              disabled={q.isFetching}
+              aria-label="Refresh apps"
+            >
+              <RefreshCw className={`h-4 w-4 ${q.isFetching ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-2">
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
