@@ -68,10 +68,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "AntiSlot Parent dashboard — monitor your children's devices, apps, usage and alerts in real time.",
       },
-      { property: "og:title", content: "AntiSlot Parent" },
-      { property: "og:description", content: "Parental monitoring dashboard for Android devices." },
+      { property: "og:title", content: "AntiSlot Parent — Parental Monitoring Dashboard" },
+      { property: "og:description", content: "AntiSlot Parent dashboard — monitor your children's devices, apps, usage and alerts in real time." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "AntiSlot Parent — Parental Monitoring Dashboard" },
+      { name: "twitter:description", content: "AntiSlot Parent dashboard — monitor your children's devices, apps, usage and alerts in real time." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c5c79df1-0d53-4933-832e-12fa2c6c4aff/id-preview-f340216a--b07be333-2d3c-440b-a6f0-97f2f2d77e50.lovable.app-1784111186266.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c5c79df1-0d53-4933-832e-12fa2c6c4aff/id-preview-f340216a--b07be333-2d3c-440b-a6f0-97f2f2d77e50.lovable.app-1784111186266.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
