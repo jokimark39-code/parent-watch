@@ -42,7 +42,7 @@ function AppsPage() {
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "high" | "review" | "safe">("all");
-  const [sort, setSort] = useState<"install_date" | "risk" | "app_name">("risk");
+  const [sort, setSort] = useState<"install_date" | "risk" | "app_name">("install_date");
   const [page, setPage] = useState(1);
   const PAGE = 15;
 
