@@ -35,10 +35,12 @@ function DevicesPage() {
   useRealtimeInvalidate("installed_apps", [["devices"]], uid);
 
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<"last_seen" | "child_name" | "device_name">("last_seen");
+  const [sort, setSort] = useState<"last_seen" | "device_name" | "device_model">("last_seen");
   const [page, setPage] = useState(1);
   const PAGE = 10;
   const [viewing, setViewing] = useState<any | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   const query = useQuery({
     queryKey: ["devices", uid],
