@@ -141,10 +141,8 @@ function DevicesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Child</TableHead>
                     <TableHead>Device</TableHead>
                     <TableHead>Model</TableHead>
-                    <TableHead>Android</TableHead>
                     <TableHead>Last seen</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Apps</TableHead>
@@ -154,10 +152,38 @@ function DevicesPage() {
                 <TableBody>
                   {paged.map((d: any) => (
                     <TableRow key={d.id}>
-                      <TableCell className="font-medium">{d.child_name || "—"}</TableCell>
-                      <TableCell>{d.device_name || "—"}</TableCell>
-                      <TableCell>{d.device_model || "—"}</TableCell>
-                      <TableCell>{d.android_version || "—"}</TableCell>
+                      <TableCell className="font-medium">
+                        {editingId === d.id ? (
+                          <div className="flex items-center gap-1">
+                            <Input
+                              autoFocus
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && editValue.trim()) rename.mutate({ id: d.id, name: editValue.trim() });
+                                if (e.key === "Escape") setEditingId(null);
+                              }}
+                              className="h-8 w-40"
+                            />
+                            <Button size="icon" variant="ghost" className="h-8 w-8" disabled={!editValue.trim() || rename.isPending}
+                              onClick={() => rename.mutate({ id: d.id, name: editValue.trim() })}>
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingId(null)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 group">
+                            <span>{d.device_name || d.device_model || "Unnamed device"}</span>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                              onClick={() => { setEditingId(d.id); setEditValue(d.device_name || ""); }}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>{d.device_model || d.manufacturer || "—"}</TableCell>
                       <TableCell>{formatRelative(d.last_seen)}</TableCell>
                       <TableCell>
                         <Badge variant={isOnline(d.last_seen) ? "default" : "secondary"}>
@@ -175,7 +201,7 @@ function DevicesPage() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete this device?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This removes {d.device_name || d.child_name || "the device"} from your dashboard.
+                                This removes {d.device_name || d.device_model || "the device"} from your dashboard.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
