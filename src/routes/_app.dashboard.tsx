@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import { useRealtimeInvalidate, formatRelative, isOnline, formatMs } from "@/lib/realtime";
+import { useRealtimeInvalidate, formatRelative, isOnline, formatMs, usageDurationMs, usageTime } from "@/lib/realtime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -30,16 +30,20 @@ function DashboardPage() {
   const q = useQuery({
     queryKey: ["dash", uid],
     enabled: !!uid,
+    staleTime: 0,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
     queryFn: async () => {
+      const since = new Date(Date.now() - 7 * 86400_000).toISOString();
       const [devicesR, appsR, alertsR, usageR] = await Promise.all([
         supabase.from("devices").select("*").order("last_seen", { ascending: false }),
-        supabase.from("installed_apps").select("*").order("created_at", { ascending: false, nullsFirst: false }),
+        supabase.from("installed_apps").select("*").order("updated_at", { ascending: false, nullsFirst: false }),
         supabase.from("alerts").select("*").order("created_at", { ascending: false }).limit(50),
         supabase
           .from("usage_events")
           .select("*")
-          .gte("event_time", new Date(Date.now() - 7 * 86400_000).toISOString())
-          .order("event_time", { ascending: false })
+          .gte("opened_at", since)
+          .order("opened_at", { ascending: false })
           .limit(2000),
       ]);
       return {
@@ -76,8 +80,8 @@ function DashboardPage() {
   const unread = d.alerts.filter((a: any) => !(a.is_read ?? a.read)).length;
 
   const today0 = new Date(); today0.setHours(0, 0, 0, 0);
-  const todayMs = d.usage.filter((u: any) => new Date(u.event_time) >= today0)
-    .reduce((s: number, u: any) => s + Number(u.duration_ms ?? 0), 0);
+  const todayMs = d.usage.filter((u: any) => new Date(usageTime(u) ?? 0) >= today0)
+    .reduce((s: number, u: any) => s + usageDurationMs(u), 0);
 
   const daily: Record<string, number> = {};
   for (let i = 6; i >= 0; i--) {
@@ -85,8 +89,8 @@ function DashboardPage() {
     daily[dt.toISOString().slice(0, 10)] = 0;
   }
   for (const u of d.usage) {
-    const key = new Date(u.event_time).toISOString().slice(0, 10);
-    if (key in daily) daily[key] += Number(u.duration_ms ?? 0);
+    const key = new Date(usageTime(u) ?? 0).toISOString().slice(0, 10);
+    if (key in daily) daily[key] += usageDurationMs(u);
   }
   const weeklyData = Object.entries(daily).map(([day, ms]) => ({
     day: day.slice(5),
@@ -95,8 +99,8 @@ function DashboardPage() {
 
   const hourly: Record<number, number> = {};
   for (let h = 0; h < 24; h++) hourly[h] = 0;
-  for (const u of d.usage.filter((u: any) => new Date(u.event_time) >= today0)) {
-    hourly[new Date(u.event_time).getHours()] += Number(u.duration_ms ?? 0);
+  for (const u of d.usage.filter((u: any) => new Date(usageTime(u) ?? 0) >= today0)) {
+    hourly[new Date(usageTime(u) ?? 0).getHours()] += usageDurationMs(u);
   }
   const todayData = Object.entries(hourly).map(([h, ms]) => ({
     hour: `${h}h`, minutes: Math.round(Number(ms) / 60000),
@@ -122,7 +126,7 @@ function DashboardPage() {
         <StatCard icon={<AlertTriangle />} label="High Risk Apps" value={highRisk} />
         <StatCard icon={<Clock />} label="Today's Usage" value={formatMs(todayMs)} />
         <StatCard icon={<BellRing />} label="Unread Alerts" value={unread} />
-        <StatCard icon={<TrendingUp />} label="Weekly Usage" value={formatMs(d.usage.reduce((s: number, u: any) => s + Number(u.duration_ms ?? 0), 0))} />
+        <StatCard icon={<TrendingUp />} label="Weekly Usage" value={formatMs(d.usage.reduce((s: number, u: any) => s + usageDurationMs(u), 0))} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

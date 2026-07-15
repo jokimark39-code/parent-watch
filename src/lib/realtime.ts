@@ -56,3 +56,11 @@ export function formatMs(ms: number): string {
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
 }
+
+export function usageTime(row: any): string | null {
+  return row?.opened_at ?? row?.event_time ?? row?.created_at ?? null;
+}
+
+export function usageDurationMs(row: any): number {
+  return Number(row?.duration_ms ?? row?.foreground_time_ms ?? row?.total_time_ms ?? 0);
+}
