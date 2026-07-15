@@ -34,7 +34,7 @@ function AppsPage() {
       const { data, error } = await supabase
         .from("installed_apps")
         .select("*")
-        .order("install_date", { ascending: false, nullsFirst: false });
+        .order("created_at", { ascending: false, nullsFirst: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -42,7 +42,7 @@ function AppsPage() {
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "high" | "review" | "safe">("all");
-  const [sort, setSort] = useState<"install_date" | "risk" | "app_name">("install_date");
+  const [sort, setSort] = useState<"created_at" | "risk" | "app_name">("created_at");
   const [page, setPage] = useState(1);
   const PAGE = 15;
 
@@ -60,7 +60,7 @@ function AppsPage() {
     if (filter === "safe") list = list.filter((a: any) => a.parent_review === "safe");
     list = [...list].sort((a: any, b: any) => {
       if (sort === "risk") return Number(b.ai_risk_score ?? b.local_risk_score ?? 0) - Number(a.ai_risk_score ?? a.local_risk_score ?? 0);
-      if (sort === "install_date") return new Date(b.install_date ?? 0).getTime() - new Date(a.install_date ?? 0).getTime();
+      if (sort === "created_at") return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
       return String(a.app_name ?? "").localeCompare(String(b.app_name ?? ""));
     });
     return list;
@@ -105,7 +105,7 @@ function AppsPage() {
             </select>
             <select className="rounded-md border bg-background px-2 text-sm" value={sort} onChange={(e) => setSort(e.target.value as any)}>
               <option value="risk">Sort: risk</option>
-              <option value="install_date">Sort: install date</option>
+              <option value="created_at">Sort: install date</option>
               <option value="app_name">Sort: name</option>
             </select>
           </div>
