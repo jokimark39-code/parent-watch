@@ -129,10 +129,10 @@ function AlertsPage() {
     if (search.trim()) {
       const s = search.toLowerCase();
       l = l.filter((a: any) => {
-        const tag = parseAlertTag(a.description);
+        const tag = parseAlertTag(a.message);
         return (
           (a.title || "").toLowerCase().includes(s) ||
-          (a.description || "").toLowerCase().includes(s) ||
+          (a.message || "").toLowerCase().includes(s) ||
           (tag.pkg || "").toLowerCase().includes(s)
         );
       });
@@ -229,7 +229,7 @@ function AlertsPage() {
           ) : (
             list.map((a: any) => {
               const isRead = a.is_read ?? a.read;
-              const tag = parseAlertTag(a.description);
+              const tag = parseAlertTag(a.message);
               const pkg = tag.pkg;
               const app = pkg ? iconByPkg.get(pkg) : undefined;
               const device = a.device_id ? deviceById.get(a.device_id) : undefined;
@@ -256,7 +256,7 @@ function AlertsPage() {
                       <div className="mt-0.5 font-mono text-xs text-muted-foreground truncate">{pkg}</div>
                     )}
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {cleanDescription(a.description) || "No details."}
+                      {cleanDescription(a.message) || "No details."}
                     </p>
                     <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                       {device && <span>Device: {device.child_name || device.device_name || device.device_model}</span>}
