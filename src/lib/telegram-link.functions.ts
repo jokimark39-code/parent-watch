@@ -199,7 +199,11 @@ export const sendTelegramAlert = createServerFn({ method: "POST" })
 
     if (!response.ok || responseBody?.ok === false) {
       console.error("Telegram send failed", response.status, responseBody);
-      throw new Error("Failed to send Telegram message");
+      const detail =
+        typeof responseBody === "string"
+          ? responseBody
+          : responseBody?.description || responseBody?.error || responseBody?.message || JSON.stringify(responseBody);
+      throw new Error(`Failed to send Telegram message${detail ? `: ${detail}` : ""}`);
     }
 
     if (!data.test && data.alertId) {
