@@ -22,7 +22,7 @@ export const Route = createFileRoute("/_app/apps")({
 function AppsPage() {
   const { user } = useAuth();
   const uid = user?.id;
-  useRealtimeInvalidate("installed_apps", [["apps", uid]], uid);
+  useRealtimeInvalidate("installed_apps", [["apps", uid ?? ""]], uid);
 
   const q = useQuery({
     queryKey: ["apps", uid],
