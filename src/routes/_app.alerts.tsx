@@ -301,10 +301,20 @@ function AlertsPage() {
               </p>
             </div>
           </div>
-          <Button size="sm" variant="outline" onClick={() => rescan.mutate()} disabled={rescan.isPending}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${rescan.isPending ? "animate-spin" : ""}`} />
-            Run scan now
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => rescan.mutate()} disabled={rescan.isPending}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${rescan.isPending ? "animate-spin" : ""}`} />
+              Local scan
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => aiScan.mutate()}
+              disabled={aiScan.isPending || (appsQ.data ?? []).length === 0}
+            >
+              <Sparkles className={`mr-2 h-4 w-4 ${aiScan.isPending ? "animate-pulse" : ""}`} />
+              {aiScan.isPending ? "AI scanning…" : "Scan all with AI"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -319,6 +329,56 @@ function AlertsPage() {
               AI risk detection is an estimate. Please review flagged apps before making decisions.
             </AlertDescription>
           </Alert>
+
+          {/* All installed apps with risk classification */}
+          <div className="rounded-lg border">
+            <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
+              <div className="text-sm font-medium">
+                All installed apps ({appRiskRows.length})
+              </div>
+              <div className="flex gap-2 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-destructive" /> High
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-yellow-500" /> Medium
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> Safe
+                </span>
+              </div>
+            </div>
+            <div className="max-h-96 overflow-y-auto divide-y">
+              {appRiskRows.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No installed apps yet.
+                </div>
+              ) : (
+                appRiskRows.map((row) => (
+                  <div key={row.app.package_name} className="flex items-start gap-3 px-3 py-2">
+                    <AppIcon name={row.app.icon_path || row.app.package_name} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium truncate">
+                          {row.app.app_name || row.app.package_name}
+                        </span>
+                        <RiskDot level={row.final} />
+                        {row.ai && (
+                          <Badge variant="outline" className="text-[10px]">AI: {row.ai.risk}</Badge>
+                        )}
+                      </div>
+                      <div className="font-mono text-[11px] text-muted-foreground truncate">
+                        {row.app.package_name}
+                      </div>
+                      <div className="text-xs text-muted-foreground line-clamp-2">
+                        {row.reason}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
