@@ -126,8 +126,8 @@ function DevicesPage() {
               value={sort} onChange={(e) => setSort(e.target.value as any)}
             >
               <option value="last_seen">Last seen</option>
-              <option value="child_name">Child name</option>
               <option value="device_name">Device name</option>
+              <option value="device_model">Model</option>
             </select>
           </div>
         </CardHeader>
