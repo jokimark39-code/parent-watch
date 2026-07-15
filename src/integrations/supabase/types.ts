@@ -58,7 +58,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      tg_link_chat: {
+        Args: { _chat_id: string; _code: string; _username?: string }
+        Returns: boolean
+      }
+      tg_status_by_chat: {
+        Args: { _chat_id: string }
+        Returns: {
+          email: string
+          is_connected: boolean
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
