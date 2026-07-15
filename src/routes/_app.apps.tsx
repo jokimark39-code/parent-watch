@@ -13,7 +13,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Search, AlertTriangle, Package } from "lucide-react";
+import { Search, AlertTriangle, Package, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/_app/apps")({
   component: AppsPage,
