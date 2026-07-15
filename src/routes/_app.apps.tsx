@@ -47,7 +47,7 @@ function AppsPage() {
   const PAGE = 15;
 
   const rows = useMemo(() => {
-    let list = q.data?.data ?? [];
+    let list = q.data ?? [];
     if (search) {
       const s = search.toLowerCase();
       list = list.filter((a: any) =>
