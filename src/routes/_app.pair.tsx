@@ -14,6 +14,14 @@ export const Route = createFileRoute("/_app/pair")({
 });
 
 const CODE_TTL_SEC = 300; // 5 minutes
+const STATUS_WAITING = "waiting";
+const STATUS_PAIRED = "paired";
+const STATUS_EXPIRED = "expired";
+const STATUS_CANCELLED = "cancelled";
+
+function normalizeStatus(status?: string | null) {
+  return (status ?? STATUS_WAITING).toLowerCase();
+}
 
 function makeCode(): string {
   // 6-char alphanumeric, ambiguity removed (no O/0/I/1)
@@ -49,7 +57,7 @@ function PairPage() {
         (payload) => {
           if (payload.new) {
             setCurrent(payload.new);
-            if ((payload.new as any).status === "PAIRED") {
+            if (normalizeStatus((payload.new as any).status) === STATUS_PAIRED) {
               toast.success("Device paired successfully!");
               qc.invalidateQueries({ queryKey: ["devices"] });
             }
@@ -64,12 +72,12 @@ function PairPage() {
     setBusy(true);
     try {
       // Keep only one active pairing code per parent. Some backends enforce this
-      // with a unique constraint, so retire the previous WAITING code before insert.
+      // with a unique constraint, so retire the previous waiting code before insert.
       const { error: retireError } = await supabase
         .from("pairing_codes")
-        .update({ status: "CANCELLED" })
+        .update({ status: STATUS_CANCELLED })
         .eq("parent_id", user.id)
-        .eq("status", "WAITING");
+        .in("status", [STATUS_WAITING, "WAITING"]);
       if (retireError) throw retireError;
 
       const expires = new Date(Date.now() + CODE_TTL_SEC * 1000).toISOString();
@@ -79,7 +87,7 @@ function PairPage() {
         const { data, error } = await supabase.from("pairing_codes").insert({
           code,
           parent_id: user.id,
-          status: "WAITING",
+          status: STATUS_WAITING,
           expires_at: expires,
         }).select().single();
         if (!error && data) {
@@ -103,18 +111,18 @@ function PairPage() {
   async function cancel() {
     if (!current) return;
     try {
-      const { error } = await supabase.from("pairing_codes").update({ status: "CANCELLED" }).eq("id", current.id);
+      const { error } = await supabase.from("pairing_codes").update({ status: STATUS_CANCELLED }).eq("id", current.id);
       if (error) throw error;
-      setCurrent({ ...current, status: "CANCELLED" });
+      setCurrent({ ...current, status: STATUS_CANCELLED });
       toast.success("Pairing cancelled");
     } catch (e: any) {
       toast.error(e.message ?? "Failed to cancel");
     }
   }
 
-  const status = current?.status as string | undefined;
-  const isExpired = current && remaining <= 0 && status === "WAITING";
-  const effectiveStatus = isExpired ? "EXPIRED" : status;
+  const status = normalizeStatus(current?.status as string | undefined);
+  const isExpired = current && remaining <= 0 && status === STATUS_WAITING;
+  const effectiveStatus = isExpired ? STATUS_EXPIRED : status;
 
   return (
     <div className="mx-auto max-w-xl">
@@ -139,7 +147,7 @@ function PairPage() {
                 </div>
                 <div className="mt-4 flex items-center justify-center gap-2">
                   <StatusBadge status={effectiveStatus} />
-                  {effectiveStatus === "WAITING" && (
+                  {effectiveStatus === STATUS_WAITING && (
                     <span className="text-sm text-muted-foreground inline-flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}
@@ -151,11 +159,11 @@ function PairPage() {
                 <Button
                   variant="outline"
                   onClick={() => { navigator.clipboard.writeText(current.code); toast.success("Copied"); }}
-                  disabled={effectiveStatus !== "WAITING"}
+                  disabled={effectiveStatus !== STATUS_WAITING}
                 >
                   <Copy className="mr-2 h-4 w-4" /> Copy
                 </Button>
-                <Button variant="outline" onClick={cancel} disabled={effectiveStatus !== "WAITING"}>
+                <Button variant="outline" onClick={cancel} disabled={effectiveStatus !== STATUS_WAITING}>
                   <X className="mr-2 h-4 w-4" /> Cancel
                 </Button>
                 <Button onClick={generate} disabled={busy}>
@@ -171,13 +179,13 @@ function PairPage() {
 }
 
 function StatusBadge({ status }: { status?: string }) {
-  const s = status ?? "WAITING";
+  const s = normalizeStatus(status);
   const map: Record<string, { v: "default" | "secondary" | "destructive" | "outline"; icon?: React.ReactNode }> = {
-    WAITING: { v: "default", icon: <Clock className="mr-1 h-3 w-3" /> },
-    PAIRED: { v: "default", icon: <CheckCircle2 className="mr-1 h-3 w-3" /> },
-    EXPIRED: { v: "secondary" },
-    CANCELLED: { v: "secondary" },
+    [STATUS_WAITING]: { v: "default", icon: <Clock className="mr-1 h-3 w-3" /> },
+    [STATUS_PAIRED]: { v: "default", icon: <CheckCircle2 className="mr-1 h-3 w-3" /> },
+    [STATUS_EXPIRED]: { v: "secondary" },
+    [STATUS_CANCELLED]: { v: "secondary" },
   };
   const { v, icon } = map[s] ?? { v: "outline" };
-  return <Badge variant={v}>{icon}{s}</Badge>;
+  return <Badge variant={v}>{icon}{s.toUpperCase()}</Badge>;
 }
