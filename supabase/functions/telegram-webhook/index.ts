@@ -1,25 +1,25 @@
 // Supabase Edge Function: telegram-webhook
 // Deploy: `supabase functions deploy telegram-webhook --no-verify-jwt`
 //
-// Talks to the APP's external Supabase (iuuvannpblamllbsqtfl) via anon key
-// + SECURITY DEFINER RPCs so no service role is needed.
+// Stores Telegram /start attempts in the Lovable Cloud backend. The dashboard
+// claims the attempt and updates the parent's own external app row via RLS.
 //
 // Secrets required:
 //   LOVABLE_API_KEY
 //   TELEGRAM_API_KEY
+//   SUPABASE_URL
+//   SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const TELEGRAM_API_KEY = Deno.env.get("TELEGRAM_API_KEY")!;
-
-// External app database (same as src/lib/supabase.ts)
-const APP_SUPABASE_URL = "https://iuuvannpblamllbsqtfl.supabase.co";
-const APP_SUPABASE_ANON = "sb_publishable_cXZHltdEI5WB4GKzjcwdQg_u3RJlPZ1";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const GATEWAY = "https://connector-gateway.lovable.dev/telegram";
 
-const app = createClient(APP_SUPABASE_URL, APP_SUPABASE_ANON, {
+const backend = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
@@ -61,31 +61,38 @@ Deno.serve(async (req) => {
         return new Response("ok");
       }
 
-      const { data: linked, error } = await app.rpc("tg_link_chat", {
-        _code: code,
-        _chat_id: chatId,
-        _username: username,
-      });
+      const { error } = await backend.from("telegram_link_attempts").upsert(
+        {
+          link_code: code,
+          telegram_chat_id: chatId,
+          telegram_username: username,
+          created_at: new Date().toISOString(),
+          consumed_at: null,
+        },
+        { onConflict: "link_code" },
+      );
 
       if (error) {
-        console.error("tg_link_chat error:", error);
+        console.error("telegram_link_attempts error:", error);
         await reply(chatId, "⚠️ Something went wrong linking your chat. Please try again in a moment.");
         return new Response("ok");
       }
 
-      if (!linked) {
-        await reply(chatId, "❌ Invalid or expired link code. Please generate a new code from your dashboard.");
-        return new Response("ok");
-      }
-
-      await reply(chatId, "✅ <b>SafeGuard Telegram alerts connected successfully.</b>\nYou will receive high-risk app alerts here.");
+      await reply(chatId, "✅ <b>Code received.</b>\nReturn to your SafeGuard dashboard — Telegram will show as connected in a few seconds.");
       return new Response("ok");
     }
 
     if (text === "/status") {
-      const { data } = await app.rpc("tg_status_by_chat", { _chat_id: chatId });
-      const row = Array.isArray(data) ? data[0] : data;
-      if (row?.is_connected) await reply(chatId, `✅ Connected as <b>${row.email ?? "parent"}</b>`);
+      const { data } = await backend
+        .from("telegram_link_attempts")
+        .select("consumed_at, created_at")
+        .eq("telegram_chat_id", chatId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data?.consumed_at) await reply(chatId, "✅ Code accepted by your SafeGuard dashboard.");
+      else if (data) await reply(chatId, "⏳ Code received. Open your SafeGuard dashboard Settings page to finish linking.");
       else await reply(chatId, "⚠️ Not connected. Generate a code in the dashboard and send /start CODE.");
       return new Response("ok");
     }
