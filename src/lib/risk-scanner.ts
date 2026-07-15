@@ -140,7 +140,7 @@ export async function scanAndCreateAlerts(parentId: string) {
       .limit(500),
     supabase
       .from("alerts")
-      .select("id,description,created_at,alert_type")
+      .select("id,message,created_at,alert_type")
       .eq("alert_type", "SUSPICIOUS_APP")
       .gte("created_at", sinceIso),
   ]);
