@@ -22,15 +22,21 @@ export const Route = createFileRoute("/_app/apps")({
 function AppsPage() {
   const { user } = useAuth();
   const uid = user?.id;
-  useRealtimeInvalidate("installed_apps", [["apps"]], uid);
+  useRealtimeInvalidate("installed_apps", [["apps", uid]], uid);
 
   const q = useQuery({
     queryKey: ["apps", uid],
     enabled: !!uid,
+    staleTime: 0,
     refetchInterval: 5000,
+    refetchIntervalInBackground: true,
     queryFn: async () => {
-      const { data, error } = await supabase.from("installed_apps").select("*");
-      return { data: data ?? [], error };
+      const { data, error } = await supabase
+        .from("installed_apps")
+        .select("*")
+        .order("install_date", { ascending: false, nullsFirst: false });
+      if (error) throw error;
+      return data ?? [];
     },
   });
 
