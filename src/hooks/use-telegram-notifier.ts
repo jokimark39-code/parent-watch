@@ -1,27 +1,29 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { useServerFn } from "@tanstack/react-start";
+import { sendTelegramAlert } from "@/lib/telegram-link.functions";
 
 /**
  * Watches for new HIGH-severity SUSPICIOUS_APP alerts for the signed-in parent
- * and invokes the `send-telegram-alert` edge function to deliver a Telegram
- * message. The edge function itself de-dupes via the `telegram_sent` flag.
+ * and invokes the Telegram server sender to deliver a Telegram message.
+ * The sender de-dupes via the `telegram_sent` flag.
  */
 export function useTelegramNotifier() {
-  const { user } = useAuth();
+  const { session, user } = useAuth();
   const uid = user?.id;
+  const sendTelegram = useServerFn(sendTelegramAlert);
   const inFlight = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || !session?.access_token) return;
+    const accessToken = session.access_token;
 
     const trySend = async (alertId: string) => {
       if (inFlight.current.has(alertId)) return;
       inFlight.current.add(alertId);
       try {
-        await supabase.functions.invoke("send-telegram-alert", {
-          body: { alert_id: alertId },
-        });
+        await sendTelegram({ data: { alertId, accessToken } });
       } catch {
         // silent — dashboard still shows the alert
       } finally {
@@ -62,5 +64,5 @@ export function useTelegramNotifier() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [uid]);
+  }, [sendTelegram, session?.access_token, uid]);
 }
