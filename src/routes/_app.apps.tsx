@@ -27,6 +27,7 @@ function AppsPage() {
   const q = useQuery({
     queryKey: ["apps", uid],
     enabled: !!uid,
+    refetchInterval: 5000,
     queryFn: async () => {
       const { data, error } = await supabase.from("installed_apps").select("*");
       return { data: data ?? [], error };
