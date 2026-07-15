@@ -8,7 +8,6 @@ import {
   formatMs,
   formatDuration,
   usageDurationMs,
-  usageTime,
 } from "@/lib/realtime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,9 +18,6 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Search, AlertTriangle } from "lucide-react";
-import {
-  Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 
 export const Route = createFileRoute("/_app/usage")({
   component: UsagePage,
@@ -45,8 +41,8 @@ function UsagePage() {
         supabase
           .from("usage_events")
           .select("*")
-          .gte("opened_at", since)
-          .order("opened_at", { ascending: false })
+          .gte("recorded_at", since)
+          .order("recorded_at", { ascending: false })
           .limit(5000),
         supabase.from("devices").select("id,name,model"),
       ]);
@@ -67,42 +63,31 @@ function UsagePage() {
 
   const stats = useMemo(() => {
     const list = q.data?.data ?? [];
-    const today0 = new Date(); today0.setHours(0, 0, 0, 0);
-    const week0 = new Date(); week0.setDate(week0.getDate() - 7);
-    const month0 = new Date(); month0.setDate(month0.getDate() - 30);
-    let today = 0, week = 0, month = 0, totalMs = 0;
-    const byApp: Record<string, number> = {};
-    const openCountByApp: Record<string, number> = {};
-    const byDay: Record<string, number> = {};
-    for (let i = 6; i >= 0; i--) {
-      const dt = new Date(); dt.setHours(0, 0, 0, 0); dt.setDate(dt.getDate() - i);
-      byDay[dt.toISOString().slice(0, 10)] = 0;
-    }
+    let totalMs = 0;
+    const byApp: Record<string, { name: string; pkg: string; ms: number; count: number; last: string | null }> = {};
     let latest: any = null;
     for (const u of list) {
-      const t = new Date(usageTime(u) ?? 0);
       const ms = usageDurationMs(u);
       totalMs += ms;
-      if (t >= month0) month += ms;
-      if (t >= week0) {
-        week += ms;
-        const k = t.toISOString().slice(0, 10);
-        if (k in byDay) byDay[k] += ms;
-      }
-      if (t >= today0) today += ms;
-      const label = u.app_name || u.package_name || "unknown";
-      byApp[label] = (byApp[label] ?? 0) + ms;
-      openCountByApp[label] = (openCountByApp[label] ?? 0) + 1;
-      if (!latest || t > new Date(usageTime(latest) ?? 0)) latest = u;
+      const name = u.app_name || u.package_name || "unknown";
+      const pkg = u.package_name || "—";
+      const key = pkg + "|" + name;
+      const t = u.opened_at || u.recorded_at || null;
+      if (!byApp[key]) byApp[key] = { name, pkg, ms: 0, count: 0, last: null };
+      byApp[key].ms += ms;
+      byApp[key].count += 1;
+      if (t && (!byApp[key].last || new Date(t) > new Date(byApp[key].last!))) byApp[key].last = t;
+      const lt = u.recorded_at || u.opened_at;
+      if (!latest || (lt && new Date(lt) > new Date(latest.recorded_at || latest.opened_at || 0))) latest = u;
     }
-    const topApps = Object.entries(byApp).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([pkg, ms]) => ({ pkg, min: Math.round(ms / 60000) }));
-    const dayChart = Object.entries(byDay).map(([d, ms]) => ({ day: d.slice(5), min: Math.round(ms / 60000) }));
-    const mostOpened = Object.entries(openCountByApp).sort((a, b) => b[1] - a[1])[0];
+    const perApp = Object.values(byApp).sort((a, b) => b.count - a.count);
+    const mostOpened = perApp[0] || null;
     return {
-      today, week, month, topApps, dayChart, totalMs,
+      totalMs,
       totalEvents: list.length,
-      mostOpened: mostOpened ? { name: mostOpened[0], count: mostOpened[1] } : null,
+      mostOpened,
       latest,
+      perApp,
     };
   }, [q.data]);
 
@@ -122,6 +107,7 @@ function UsagePage() {
   const pages = Math.max(1, Math.ceil(filteredEvents.length / PAGE));
 
   const latestName = stats.latest ? (stats.latest.app_name || stats.latest.package_name || "—") : "—";
+  const latestTime = stats.latest ? (stats.latest.recorded_at || stats.latest.opened_at) : null;
   const totalUsageLabel = stats.totalMs > 0 ? formatMs(stats.totalMs) : "Tracking opens only";
 
   return (
@@ -138,46 +124,49 @@ function UsagePage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">Total open events</div><div className="text-2xl font-semibold">{stats.totalEvents}</div></CardContent></Card>
+          <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">Latest opened app</div><div className="text-2xl font-semibold truncate">{latestName}</div><div className="text-xs text-muted-foreground">{latestTime ? new Date(latestTime).toLocaleString() : ""}</div></CardContent></Card>
           <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">Most opened app</div><div className="text-2xl font-semibold truncate">{stats.mostOpened?.name ?? "—"}</div><div className="text-xs text-muted-foreground">{stats.mostOpened ? `${stats.mostOpened.count} opens` : ""}</div></CardContent></Card>
-          <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">Latest opened app</div><div className="text-2xl font-semibold truncate">{latestName}</div><div className="text-xs text-muted-foreground">{stats.latest ? new Date(usageTime(stats.latest) ?? 0).toLocaleString() : ""}</div></CardContent></Card>
           <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">Total usage time</div><div className="text-2xl font-semibold">{totalUsageLabel}</div></CardContent></Card>
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle>Daily usage (last 7 days)</CardTitle></CardHeader>
-          <CardContent className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.dayChart}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis dataKey="day" fontSize={11} />
-                <YAxis fontSize={11} />
-                <Tooltip />
-                <Bar dataKey="min" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Most used apps</CardTitle></CardHeader>
-          <CardContent className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.topApps} layout="vertical" margin={{ left: 30 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis type="number" fontSize={11} />
-                <YAxis dataKey="pkg" type="category" fontSize={10} width={120} />
-                <Tooltip />
-                <Bar dataKey="min" fill="var(--color-chart-2)" radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader><CardTitle>App usage summary</CardTitle></CardHeader>
+        <CardContent>
+          {stats.perApp.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No usage yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>App name</TableHead>
+                    <TableHead>Package name</TableHead>
+                    <TableHead>Total duration</TableHead>
+                    <TableHead>Open count</TableHead>
+                    <TableHead>Last opened</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stats.perApp.slice(0, 20).map((a) => (
+                    <TableRow key={a.pkg + a.name}>
+                      <TableCell className="font-medium">{a.name}</TableCell>
+                      <TableCell className="font-mono text-xs">{a.pkg}</TableCell>
+                      <TableCell>{a.ms > 0 ? formatMs(a.ms) : "Opened only"}</TableCell>
+                      <TableCell>{a.count}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{a.last ? new Date(a.last).toLocaleString() : "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Usage events</CardTitle>
+          <CardTitle>Usage history</CardTitle>
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input className="pl-8 w-56" placeholder="Filter by app or package…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
@@ -193,7 +182,7 @@ function UsagePage() {
                   <TableRow>
                     <TableHead>App Name</TableHead>
                     <TableHead>Package Name</TableHead>
-                    <TableHead>Device</TableHead>
+                    <TableHead>Device Name</TableHead>
                     <TableHead>Opened At</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead>Recorded At</TableHead>

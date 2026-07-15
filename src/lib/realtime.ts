@@ -61,7 +61,7 @@ export function formatMs(ms: number): string {
 /** Human-readable duration for a single usage event. */
 export function formatDuration(ms: number | null | undefined): string {
   const n = Number(ms ?? 0);
-  if (!n || n <= 0) return "Opened";
+  if (!n || n <= 0) return "Opened only";
   const s = Math.floor(n / 1000);
   if (s < 60) return `${s}s`;
   const h = Math.floor(s / 3600);
