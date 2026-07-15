@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase, APP_ICONS_BUCKET } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import { useRealtimeInvalidate } from "@/lib/realtime";
+import { formatRelative, useRealtimeInvalidate } from "@/lib/realtime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ function AppsPage() {
   const { user } = useAuth();
   const uid = user?.id;
   useRealtimeInvalidate("installed_apps", [["apps", uid ?? ""]], uid);
+  useRealtimeInvalidate("usage_events", [["apps", uid ?? ""]], uid);
 
   const q = useQuery({
     queryKey: ["apps", uid],
@@ -31,18 +32,62 @@ function AppsPage() {
     refetchInterval: 5000,
     refetchIntervalInBackground: true,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("installed_apps")
-        .select("*")
-        .order("created_at", { ascending: false, nullsFirst: false });
-      if (error) throw error;
-      return data ?? [];
+      const [appsR, usageR] = await Promise.all([
+        supabase
+          .from("installed_apps")
+          .select("*")
+          .order("updated_at", { ascending: false, nullsFirst: false }),
+        supabase
+          .from("usage_events")
+          .select("id,parent_id,device_id,package_name,app_name,opened_at,created_at")
+          .order("opened_at", { ascending: false, nullsFirst: false })
+          .limit(1000),
+      ]);
+      if (appsR.error) throw appsR.error;
+      if (usageR.error) throw usageR.error;
+
+      const byApp = new Map<string, any>();
+      const keyFor = (row: any) => `${row.device_id ?? ""}:${row.package_name ?? ""}`;
+
+      for (const app of appsR.data ?? []) {
+        byApp.set(keyFor(app), { ...app, last_opened_at: null, activity_source: "installed" });
+      }
+
+      for (const event of usageR.data ?? []) {
+        if (!event.package_name) continue;
+        const key = keyFor(event);
+        const existing = byApp.get(key);
+        if (existing) {
+          if (!existing.last_opened_at || new Date(event.opened_at ?? 0) > new Date(existing.last_opened_at)) {
+            existing.last_opened_at = event.opened_at;
+          }
+          if (!existing.app_name && event.app_name) existing.app_name = event.app_name;
+          existing.activity_source = "usage";
+        } else {
+          byApp.set(key, {
+            id: `usage-${event.id}`,
+            parent_id: event.parent_id,
+            device_id: event.device_id,
+            package_name: event.package_name,
+            app_name: event.app_name,
+            created_at: event.created_at ?? event.opened_at,
+            updated_at: event.opened_at,
+            last_detected_at: event.opened_at,
+            last_opened_at: event.opened_at,
+            activity_source: "usage",
+          });
+        }
+      }
+
+      return [...byApp.values()].sort(
+        (a, b) => getAppActivityTime(b) - getAppActivityTime(a),
+      );
     },
   });
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "high" | "review" | "safe">("all");
-  const [sort, setSort] = useState<"created_at" | "risk" | "app_name">("created_at");
+  const [sort, setSort] = useState<"last_activity" | "risk" | "app_name">("last_activity");
   const [page, setPage] = useState(1);
   const PAGE = 15;
 
@@ -60,7 +105,7 @@ function AppsPage() {
     if (filter === "safe") list = list.filter((a: any) => a.parent_review === "safe");
     list = [...list].sort((a: any, b: any) => {
       if (sort === "risk") return Number(b.ai_risk_score ?? b.local_risk_score ?? 0) - Number(a.ai_risk_score ?? a.local_risk_score ?? 0);
-      if (sort === "created_at") return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
+      if (sort === "last_activity") return getAppActivityTime(b) - getAppActivityTime(a);
       return String(a.app_name ?? "").localeCompare(String(b.app_name ?? ""));
     });
     return list;
@@ -104,8 +149,8 @@ function AppsPage() {
               <option value="safe">Marked safe</option>
             </select>
             <select className="rounded-md border bg-background px-2 text-sm" value={sort} onChange={(e) => setSort(e.target.value as any)}>
+              <option value="last_activity">Sort: latest activity</option>
               <option value="risk">Sort: risk</option>
-              <option value="created_at">Sort: install date</option>
               <option value="app_name">Sort: name</option>
             </select>
           </div>
@@ -114,7 +159,7 @@ function AppsPage() {
           {q.isLoading ? (
             <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
           ) : rows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No installed apps reported yet.</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">No app activity reported yet.</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -122,6 +167,7 @@ function AppsPage() {
                   <TableRow>
                     <TableHead>App</TableHead>
                     <TableHead>Package</TableHead>
+                    <TableHead>Last opened</TableHead>
                     <TableHead>Version</TableHead>
                     <TableHead>Local</TableHead>
                     <TableHead>AI</TableHead>
@@ -139,6 +185,7 @@ function AppsPage() {
                         </Link>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{a.package_name}</TableCell>
+                      <TableCell>{formatRelative(a.last_opened_at ?? a.last_detected_at ?? a.updated_at ?? a.created_at)}</TableCell>
                       <TableCell>{a.version_name || "—"}</TableCell>
                       <TableCell>{a.local_risk_score ?? "—"}</TableCell>
                       <TableCell>
@@ -146,7 +193,7 @@ function AppsPage() {
                           {a.ai_risk_score ?? "—"}
                         </Badge>
                       </TableCell>
-                      <TableCell><Badge variant="outline">{a.classification || "unknown"}</Badge></TableCell>
+                      <TableCell><Badge variant="outline">{a.classification || a.local_classification || "unknown"}</Badge></TableCell>
                       <TableCell><Badge variant="secondary">{a.parent_review || "pending"}</Badge></TableCell>
                     </TableRow>
                   ))}
@@ -167,6 +214,10 @@ function AppsPage() {
       </Card>
     </div>
   );
+}
+
+function getAppActivityTime(app: any): number {
+  return new Date(app.last_opened_at ?? app.last_detected_at ?? app.updated_at ?? app.created_at ?? 0).getTime();
 }
 
 export function AppIcon({ name, size = 32 }: { name?: string; size?: number }) {

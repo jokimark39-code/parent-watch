@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ArrowLeft, AlertTriangle, Shield, Eye, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { AppIcon } from "./_app.apps";
-import { formatMs } from "@/lib/realtime";
+import { formatMs, usageDurationMs, usageTime } from "@/lib/realtime";
 
 export const Route = createFileRoute("/_app/apps/$pkg")({
   component: AppDetailPage,
@@ -33,8 +33,8 @@ function AppDetailPage() {
           .from("usage_events")
           .select("*")
           .eq("package_name", pkg)
-          .gte("event_time", new Date(Date.now() - 7 * 86400_000).toISOString())
-          .order("event_time", { ascending: false })
+          .gte("opened_at", new Date(Date.now() - 7 * 86400_000).toISOString())
+          .order("opened_at", { ascending: false })
           .limit(500),
       ]);
       return {
@@ -78,7 +78,7 @@ function AppDetailPage() {
     </Card>
   );
 
-  const totalMs = q.data!.usage.reduce((s: number, u: any) => s + Number(u.duration_ms ?? 0), 0);
+  const totalMs = q.data!.usage.reduce((s: number, u: any) => s + usageDurationMs(u), 0);
   const reasons = (q.data?.ai?.risk_reasons as string[]) || (a.risk_reasons as string[]) || [];
   const keywords = (q.data?.ai?.matched_keywords as string[]) || (a.matched_keywords as string[]) || [];
 
@@ -153,8 +153,8 @@ function AppDetailPage() {
             <ul className="max-h-64 space-y-1 overflow-y-auto text-sm">
               {q.data!.usage.slice(0, 50).map((u: any) => (
                 <li key={u.id} className="flex justify-between border-b py-1">
-                  <span>{new Date(u.event_time).toLocaleString()}</span>
-                  <span className="text-muted-foreground">{formatMs(Number(u.duration_ms ?? 0))}</span>
+                  <span>{new Date(usageTime(u) ?? 0).toLocaleString()}</span>
+                  <span className="text-muted-foreground">{formatMs(usageDurationMs(u))}</span>
                 </li>
               ))}
             </ul>

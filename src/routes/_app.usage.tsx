@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import { useRealtimeInvalidate, formatMs } from "@/lib/realtime";
+import { useRealtimeInvalidate, formatMs, usageDurationMs, usageTime } from "@/lib/realtime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,14 +26,18 @@ function UsagePage() {
   const q = useQuery({
     queryKey: ["usage", uid],
     enabled: !!uid,
+    staleTime: 0,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
     queryFn: async () => {
       const since = new Date(Date.now() - 30 * 86400_000).toISOString();
       const { data, error } = await supabase
         .from("usage_events")
         .select("*")
-        .gte("event_time", since)
-        .order("event_time", { ascending: false })
+        .gte("opened_at", since)
+        .order("opened_at", { ascending: false })
         .limit(5000);
+      if (error) throw error;
       return { data: data ?? [], error };
     },
   });
@@ -55,8 +59,8 @@ function UsagePage() {
       byDay[dt.toISOString().slice(0, 10)] = 0;
     }
     for (const u of list) {
-      const t = new Date(u.event_time);
-      const ms = Number(u.duration_ms ?? 0);
+      const t = new Date(usageTime(u) ?? 0);
+      const ms = usageDurationMs(u);
       if (t >= month0) month += ms;
       if (t >= week0) {
         week += ms;
@@ -150,7 +154,7 @@ function UsagePage() {
               {paged.map((u: any) => (
                 <li key={u.id} className="flex justify-between border-b py-2">
                   <span className="font-mono text-xs">{u.package_name}</span>
-                  <span className="text-muted-foreground">{new Date(u.event_time).toLocaleString()} · {formatMs(Number(u.duration_ms ?? 0))}</span>
+                  <span className="text-muted-foreground">{new Date(usageTime(u) ?? 0).toLocaleString()} · {formatMs(usageDurationMs(u))}</span>
                 </li>
               ))}
             </ul>
