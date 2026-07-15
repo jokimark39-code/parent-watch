@@ -34,7 +34,7 @@ const nav = [
   { title: "Pair Device", url: "/pair", icon: QrCode },
   { title: "Visited Apps", url: "/apps", icon: AppWindow },
   { title: "Usage", url: "/usage", icon: BarChart3 },
-  { title: "Alerts", url: "/alerts", icon: Bell },
+  { title: "Risk Levels", url: "/alerts", icon: Bell },
   { title: "Settings", url: "/settings", icon: Settings },
 ] as const;
 
