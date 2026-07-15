@@ -231,12 +231,11 @@ function DevicesPage() {
 
       <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{viewing?.device_name || viewing?.child_name || "Device"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{viewing?.device_name || viewing?.device_model || "Device"}</DialogTitle></DialogHeader>
           {viewing && (
             <dl className="grid grid-cols-2 gap-2 text-sm">
-              <dt className="text-muted-foreground">Child</dt><dd>{viewing.child_name || "—"}</dd>
+              <dt className="text-muted-foreground">Name</dt><dd>{viewing.device_name || "—"}</dd>
               <dt className="text-muted-foreground">Model</dt><dd>{viewing.device_model || "—"}</dd>
-              <dt className="text-muted-foreground">Android</dt><dd>{viewing.android_version || "—"}</dd>
               <dt className="text-muted-foreground">Manufacturer</dt><dd>{viewing.manufacturer || "—"}</dd>
               <dt className="text-muted-foreground">Last seen</dt><dd>{formatRelative(viewing.last_seen)}</dd>
               <dt className="text-muted-foreground">Installed apps</dt><dd>{appsCount[viewing.id] ?? 0}</dd>
