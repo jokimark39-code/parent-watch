@@ -153,10 +153,10 @@ export const sendTelegramAlert = createServerFn({ method: "POST" })
       if (alert.device_id) {
         const { data: device } = await app
           .from("devices")
-          .select("child_name,device_name,device_model")
+          .select("name,model")
           .eq("id", alert.device_id)
           .maybeSingle();
-        deviceName = device?.child_name || device?.device_name || device?.device_model || null;
+        deviceName = device?.name || device?.model || null;
       }
 
       const pkgMatch = (alert.message || "").match(/\(([^)]+)\)/);

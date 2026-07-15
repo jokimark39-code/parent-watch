@@ -65,7 +65,7 @@ function AlertsPage() {
     queryKey: ["alerts-devices", uid],
     enabled: !!uid,
     queryFn: async () => {
-      const { data } = await supabase.from("devices").select("id,child_name,device_name,device_model");
+      const { data } = await supabase.from("devices").select("id,name,model");
       return data ?? [];
     },
   });
@@ -452,7 +452,7 @@ function AlertsPage() {
                       {cleanDescription(a.message) || "No details."}
                     </p>
                     <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                      {device && <span>Device: {device.child_name || device.device_name || device.device_model}</span>}
+                      {device && <span>Device: {device.name || device.model}</span>}
                       <span>{formatRelative(a.created_at)}</span>
                     </div>
                   </div>

@@ -58,10 +58,25 @@ export function formatMs(ms: number): string {
   return `${m}m`;
 }
 
+/** Human-readable duration for a single usage event. */
+export function formatDuration(ms: number | null | undefined): string {
+  const n = Number(ms ?? 0);
+  if (!n || n <= 0) return "Opened";
+  const s = Math.floor(n / 1000);
+  if (s < 60) return `${s}s`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const rs = s % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${rs}s`;
+}
+
 export function usageTime(row: any): string | null {
-  return row?.opened_at ?? row?.event_time ?? row?.created_at ?? null;
+  return row?.opened_at ?? row?.event_time ?? row?.recorded_at ?? row?.created_at ?? null;
 }
 
 export function usageDurationMs(row: any): number {
-  return Number(row?.duration_ms ?? row?.foreground_time_ms ?? row?.total_time_ms ?? 0);
+  return Number(
+    row?.duration_millis ?? row?.duration_ms ?? row?.foreground_time_ms ?? row?.total_time_ms ?? 0,
+  );
 }
