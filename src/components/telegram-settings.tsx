@@ -309,6 +309,11 @@ export function TelegramSettings() {
           </ol>
         </details>
       </CardContent>
+      <PremiumUpgradeModal
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        onActivated={() => qc.invalidateQueries({ queryKey: ["profile-premium"] })}
+      />
     </Card>
   );
 }
