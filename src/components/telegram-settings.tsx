@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useRealtimeInvalidate } from "@/lib/realtime";
-import { claimTelegramLinkAttempt } from "@/lib/telegram-link.functions";
+import { claimTelegramLinkAttempt, sendTelegramAlert } from "@/lib/telegram-link.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,7 @@ export function TelegramSettings() {
   const uid = user?.id;
   const qc = useQueryClient();
   const claimTelegramLink = useServerFn(claimTelegramLinkAttempt);
+  const sendTelegram = useServerFn(sendTelegramAlert);
   const claimingCode = useRef<string | null>(null);
   useRealtimeInvalidate("telegram_connections", [["telegram-connection"]], uid);
 
@@ -123,11 +124,8 @@ export function TelegramSettings() {
   async function sendTest() {
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("send-telegram-alert", {
-        body: { test: true },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if (!session?.access_token) throw new Error("Not signed in");
+      await sendTelegram({ data: { test: true, accessToken: session.access_token } });
       toast.success("Test alert sent to your Telegram");
     } catch (e: any) {
       toast.error(e.message ?? "Failed to send test");
