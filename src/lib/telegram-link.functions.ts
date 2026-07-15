@@ -50,9 +50,24 @@ export const claimTelegramLinkAttempt = createServerFn({ method: "POST" })
     if (error) throw error;
     if (!attempt) return { linked: false as const };
 
+    const now = new Date().toISOString();
+    const { error: updateError } = await app
+      .from("telegram_connections")
+      .update({
+        telegram_chat_id: attempt.telegram_chat_id,
+        telegram_username: attempt.telegram_username,
+        is_connected: true,
+        connected_at: now,
+        updated_at: now,
+      })
+      .eq("parent_id", authData.user.id)
+      .eq("link_code", code);
+
+    if (updateError) throw updateError;
+
     const { error: consumeError } = await admin
       .from("telegram_link_attempts")
-      .update({ consumed_at: new Date().toISOString() })
+      .update({ consumed_at: now })
       .eq("link_code", code)
       .is("consumed_at", null);
 

@@ -106,21 +106,6 @@ export function TelegramSettings() {
       try {
         const claimed = await claimTelegramLink({ data: { code, accessToken: session.access_token } });
         if (cancelled || !claimed.linked) return;
-
-        const now = new Date().toISOString();
-        const { error } = await supabase
-          .from("telegram_connections")
-          .update({
-            telegram_chat_id: claimed.telegram_chat_id,
-            telegram_username: claimed.telegram_username,
-            is_connected: true,
-            connected_at: now,
-            updated_at: now,
-          })
-          .eq("parent_id", user.id)
-          .eq("link_code", code);
-
-        if (error) throw error;
         toast.success("Telegram connected");
         qc.invalidateQueries({ queryKey: ["telegram-connection"] });
       } catch (e: any) {
