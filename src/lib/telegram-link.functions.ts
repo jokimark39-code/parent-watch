@@ -6,14 +6,38 @@ export const claimTelegramLinkAttempt = createServerFn({ method: "POST" })
     z
       .object({
         code: z.string().trim().min(4).max(32),
+        accessToken: z.string().min(20),
       })
       .parse(input),
   )
   .handler(async ({ data }) => {
+    const { createClient } = await import("@supabase/supabase-js");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const app = createClient(
+      "https://iuuvannpblamllbsqtfl.supabase.co",
+      "sb_publishable_cXZHltdEI5WB4GKzjcwdQg_u3RJlPZ1",
+      {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { headers: { Authorization: `Bearer ${data.accessToken}` } },
+      },
+    );
+
+    const { data: authData, error: authError } = await app.auth.getUser(data.accessToken);
+    if (authError || !authData.user) throw new Error("Not signed in");
+
     const admin = supabaseAdmin as any;
     const code = data.code.trim().toUpperCase();
     const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+
+    const { data: connection, error: connectionError } = await app
+      .from("telegram_connections")
+      .select("parent_id, link_code, is_connected")
+      .eq("parent_id", authData.user.id)
+      .eq("link_code", code)
+      .maybeSingle();
+
+    if (connectionError) throw connectionError;
+    if (!connection || connection.is_connected) return { linked: false as const };
 
     const { data: attempt, error } = await admin
       .from("telegram_link_attempts")

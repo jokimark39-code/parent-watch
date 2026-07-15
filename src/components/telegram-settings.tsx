@@ -23,7 +23,7 @@ function genCode() {
 }
 
 export function TelegramSettings() {
-  const { user } = useAuth();
+  const { session, user } = useAuth();
   const uid = user?.id;
   const qc = useQueryClient();
   const claimTelegramLink = useServerFn(claimTelegramLinkAttempt);
@@ -95,7 +95,7 @@ export function TelegramSettings() {
 
   useEffect(() => {
     const conn = connQ.data;
-    if (!user || !conn?.link_code || conn.is_connected) return;
+    if (!session?.access_token || !user || !conn?.link_code || conn.is_connected) return;
     const code = String(conn.link_code).trim().toUpperCase();
     if (claimingCode.current === code) return;
 
@@ -104,7 +104,7 @@ export function TelegramSettings() {
 
     (async () => {
       try {
-        const claimed = await claimTelegramLink({ data: { code } });
+        const claimed = await claimTelegramLink({ data: { code, accessToken: session.access_token } });
         if (cancelled || !claimed.linked) return;
 
         const now = new Date().toISOString();
@@ -133,7 +133,7 @@ export function TelegramSettings() {
     return () => {
       cancelled = true;
     };
-  }, [claimTelegramLink, connQ.data, qc, user]);
+  }, [claimTelegramLink, connQ.data, qc, session?.access_token, user]);
 
   async function sendTest() {
     setSending(true);
