@@ -504,3 +504,17 @@ function SeverityBadge({ s }: { s?: string }) {
         : "secondary";
   return <Badge variant={variant as any}>{key}</Badge>;
 }
+
+function RiskDot({ level }: { level: "HIGH" | "MEDIUM" | "SAFE" }) {
+  const cls =
+    level === "HIGH"
+      ? "bg-destructive text-destructive-foreground"
+      : level === "MEDIUM"
+        ? "bg-yellow-500 text-black"
+        : "bg-emerald-500 text-white";
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${cls}`}>
+      {level}
+    </span>
+  );
+}
