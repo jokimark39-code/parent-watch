@@ -167,9 +167,9 @@ function DashboardPage() {
             {d.devices.slice(0, 5).map((dev: any) => (
               <div key={dev.id} className="flex items-center justify-between rounded-lg border p-3">
                 <div>
-                  <div className="text-sm font-medium">{dev.child_name || dev.device_name || "Device"}</div>
+                  <div className="text-sm font-medium">{dev.name || "Device"}</div>
                   <div className="text-xs text-muted-foreground">
-                    {dev.device_model || "—"} · {formatRelative(dev.last_seen)}
+                    {dev.model || "—"} · {formatRelative(dev.last_seen)}
                   </div>
                 </div>
                 <Badge variant={isOnline(dev.last_seen) ? "default" : "secondary"}>
