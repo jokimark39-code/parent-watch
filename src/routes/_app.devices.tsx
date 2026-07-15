@@ -66,6 +66,19 @@ function DevicesPage() {
     onError: (e: any) => toast.error(e.message ?? "Failed to delete"),
   });
 
+  const rename = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("devices").update({ device_name: name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Device renamed");
+      setEditingId(null);
+      qc.invalidateQueries({ queryKey: ["devices"] });
+    },
+    onError: (e: any) => toast.error(e.message ?? "Failed to rename"),
+  });
+
   const rows = useMemo(() => {
     const list = (query.data?.devices ?? []).filter((d: any) => {
       if (!q) return true;
