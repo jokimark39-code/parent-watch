@@ -30,7 +30,23 @@ export function TelegramSettings() {
   const claimTelegramLink = useServerFn(claimTelegramLinkAttempt);
   const sendTelegram = useServerFn(sendTelegramAlert);
   const claimingCode = useRef<string | null>(null);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   useRealtimeInvalidate("telegram_connections", [["telegram-connection"]], uid);
+
+  const profileQ = useQuery({
+    queryKey: ["profile-premium", uid],
+    enabled: !!uid,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("is_premium, premium_plan, premium_activated_at")
+        .eq("id", uid!)
+        .maybeSingle();
+      if (error && !/no rows/i.test(error.message)) throw error;
+      return data;
+    },
+  });
+  const isPremium = !!profileQ.data?.is_premium;
 
   const connQ = useQuery({
     queryKey: ["telegram-connection", uid],
